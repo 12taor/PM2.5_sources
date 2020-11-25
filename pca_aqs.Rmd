@@ -1,0 +1,229 @@
+---
+title: "Explore AQS monitor datasets"
+author: Rachel Tao
+output: html_document
+
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(rvest)
+library(httr)
+library(lubridate)
+library(ggmap)
+library(ggcorrplot)
+library(gplots)
+library(GGally)
+library(knitr)
+
+knitr::opts_chunk$set(
+	fig.asp = 0.6,
+	fig.width = 6,
+	out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+load data
+
+```{r}
+
+components_all <- read_csv("./data/pm2.5_components_daily_nyc_3sites_averg.csv") %>% 
+  rename(
+    aluminum = aluminum_pm2_5_lc_88104, 
+    arsenic = arsenic_pm2_5_lc_88103,
+    barium = barium_pm2_5_lc_88107,
+    bromine = bromine_pm2_5_lc_88109,
+    cadmium = cadmium_pm2_5_lc_88110,
+    calcium = calcium_pm2_5_lc_88111,
+    chromium = chromium_pm2_5_lc_88112,
+    copper = copper_pm2_5_lc_88114,
+    iron = iron_pm2_5_lc_88126,
+    lead = lead_pm2_5_lc_88128,
+    magnesium = magnesium_pm2_5_lc_88140,
+    manganese = manganese_pm2_5_lc_88132,
+    nickel = nickel_pm2_5_lc_88136,
+    selenium = selenium_pm2_5_lc_88154,
+    silicon = silicon_pm2_5_lc_88165,
+    sulfate = sulfate_pm2_5_lc_88403,
+    sulfur = sulfur_pm2_5_lc_88169,
+    titanium = titanium_pm2_5_lc_88161,
+    nitrates = total_nitrate_pm2_5_lc_88306,
+    vanadium = vanadium_pm2_5_lc_88164,
+    zinc = zinc_pm2_5_lc_88167
+    )
+
+components_any <- read_csv("./data/pm2.5_components_daily_nyc_any3_averg.csv")%>% 
+  rename(
+    aluminum = aluminum_pm2_5_lc_88104, 
+    arsenic = arsenic_pm2_5_lc_88103,
+    barium = barium_pm2_5_lc_88107,
+    bromine = bromine_pm2_5_lc_88109,
+    cadmium = cadmium_pm2_5_lc_88110,
+    calcium = calcium_pm2_5_lc_88111,
+    chromium = chromium_pm2_5_lc_88112,
+    copper = copper_pm2_5_lc_88114,
+    iron = iron_pm2_5_lc_88126,
+    lead = lead_pm2_5_lc_88128,
+    magnesium = magnesium_pm2_5_lc_88140,
+    manganese = manganese_pm2_5_lc_88132,
+    nickel = nickel_pm2_5_lc_88136,
+    selenium = selenium_pm2_5_lc_88154,
+    silicon = silicon_pm2_5_lc_88165,
+    sulfate = sulfate_pm2_5_lc_88403,
+    sulfur = sulfur_pm2_5_lc_88169,
+    titanium = titanium_pm2_5_lc_88161,
+    nitrates = total_nitrate_pm2_5_lc_88306,
+    vanadium = vanadium_pm2_5_lc_88164,
+    zinc = zinc_pm2_5_lc_88167
+    )
+
+components_124 <- read_csv("./data/pm2.5_components_daily_nyc_site124.csv") %>% 
+  rename(
+    aluminum = aluminum_pm2_5_lc_88104, 
+    arsenic = arsenic_pm2_5_lc_88103,
+    barium = barium_pm2_5_lc_88107,
+    bromine = bromine_pm2_5_lc_88109,
+    cadmium = cadmium_pm2_5_lc_88110,
+    calcium = calcium_pm2_5_lc_88111,
+    chromium = chromium_pm2_5_lc_88112,
+    copper = copper_pm2_5_lc_88114,
+    iron = iron_pm2_5_lc_88126,
+    lead = lead_pm2_5_lc_88128,
+    magnesium = magnesium_pm2_5_lc_88140,
+    manganese = manganese_pm2_5_lc_88132,
+    nickel = nickel_pm2_5_lc_88136,
+    selenium = selenium_pm2_5_lc_88154,
+    silicon = silicon_pm2_5_lc_88165,
+    sulfate = sulfate_pm2_5_lc_88403,
+    sulfur = sulfur_pm2_5_lc_88169,
+    titanium = titanium_pm2_5_lc_88161,
+    nitrates = total_nitrate_pm2_5_lc_88306,
+    vanadium = vanadium_pm2_5_lc_88164,
+    zinc = zinc_pm2_5_lc_88167
+    )
+
+total_pm2.5 <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv")
+
+components_any <- 
+  components_any %>%
+  left_join(total_pm2.5, by = "date_local") %>%
+  select(date_local: pm2.5_total)
+
+```
+
+Correlation matrix using dataset including any available monitors
+
+```{r}
+components_any %>% 
+  ggcorr(method = c("everything", "spearman"), limits = FALSE,
+       label = TRUE, label_size = 3, label_alpha = TRUE,
+       hjust = 0.85, size = 3, color = "grey50", layout.exp = 1) + ggtitle("Correlation Matrix: NYC Air Pollution Dataset (any available monitor")
+```
+
+PCA any
+
+```{r}
+
+components_any <- 
+  components_any %>% 
+  select(-date_local, -pm2.5_total)
+
+pca_any <- 
+  prcomp(components_any)
+
+summary(pca_any)
+
+pca_any$rotation %>% 
+  as_tibble() %>% 
+  mutate(Chemicals = colnames(components_any)) %>% 
+  select(Chemicals, PC1:PC6) %>% 
+  gather(key = Component, value = Loadings, -Chemicals) %>%
+  mutate(Chemicals = fct_inorder(Chemicals)) %>%
+  ggplot(aes(x = Chemicals, y = Loadings)) + geom_point() +
+  geom_segment(aes(yend=0, xend = Chemicals)) +
+  facet_wrap(.~Component) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        strip.background = element_blank())
+
+scores_pca <- pca_any$x
+
+```
+
+PCA all
+
+```{r}
+components_all <- 
+  components_all %>% 
+  select(-date_local, -X1)
+
+pca_all <- 
+  prcomp(components_all)
+
+summary(pca_all)
+
+pca_all$rotation %>% 
+  as_tibble() %>% 
+  mutate(Chemicals = colnames(components_all)) %>% 
+  select(Chemicals, PC1:PC6) %>% 
+  gather(key = Component, value = Loadings, -Chemicals) %>%
+  mutate(Chemicals = fct_inorder(Chemicals)) %>%
+  ggplot(aes(x = Chemicals, y = Loadings)) + geom_point() +
+  geom_segment(aes(yend=0, xend = Chemicals)) +
+  facet_wrap(.~Component) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        strip.background = element_blank())
+
+scores_pca <- pca_all$x
+```
+
+PCA queens
+
+```{r}
+components_124 <- 
+  components_124 %>% 
+  select(-date_local, -X1)
+
+pca_124 <- 
+  prcomp(components_124)
+
+summary(pca_all)
+
+pca_124$rotation %>% 
+  as_tibble() %>% 
+  mutate(Chemicals = colnames(components_124)) %>% 
+  select(Chemicals, PC1:PC6) %>% 
+  gather(key = Component, value = Loadings, -Chemicals) %>%
+  mutate(Chemicals = fct_inorder(Chemicals)) %>%
+  ggplot(aes(x = Chemicals, y = Loadings)) + geom_point() +
+  geom_segment(aes(yend=0, xend = Chemicals)) +
+  facet_wrap(.~Component) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        strip.background = element_blank())
+
+scores_pca <- pca_124$x
+```
+
+
+summary statistics and visualizations
+
+```{r}
+PCA_any <- pca_any$sdev^2/sum(pca_any$sdev^2) *100
+PCA_all <- pca_any$sdev^2/sum(pca_all$sdev^2) *100
+PCA_124 <- pca_any$sdev^2/sum(pca_124$sdev^2) *100
+round(cbind(Component = 1:21, PCA_any, PCA_all, PCA_124), 4) %>% kable()
+```
+
+geometry column in R with coordinates
