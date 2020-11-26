@@ -8,8 +8,6 @@ output: html_document
 ```{r setup, include = FALSE}
 
 library(tidyverse)
-library(rvest)
-library(httr)
 library(lubridate)
 library(ggmap)
 library(ggcorrplot)
@@ -37,7 +35,8 @@ load data
 
 ```{r}
 
-components_all <- read_csv("./data/pm2.5_components_daily_nyc_3sites_averg.csv") %>% 
+rename_pollutants = function(df){
+  data = df %>% 
   rename(
     aluminum = aluminum_pm2_5_lc_88104, 
     arsenic = arsenic_pm2_5_lc_88103,
@@ -61,63 +60,26 @@ components_all <- read_csv("./data/pm2.5_components_daily_nyc_3sites_averg.csv")
     vanadium = vanadium_pm2_5_lc_88164,
     zinc = zinc_pm2_5_lc_88167
     )
+}
 
-components_any <- read_csv("./data/pm2.5_components_daily_nyc_any3_averg.csv")%>% 
-  rename(
-    aluminum = aluminum_pm2_5_lc_88104, 
-    arsenic = arsenic_pm2_5_lc_88103,
-    barium = barium_pm2_5_lc_88107,
-    bromine = bromine_pm2_5_lc_88109,
-    cadmium = cadmium_pm2_5_lc_88110,
-    calcium = calcium_pm2_5_lc_88111,
-    chromium = chromium_pm2_5_lc_88112,
-    copper = copper_pm2_5_lc_88114,
-    iron = iron_pm2_5_lc_88126,
-    lead = lead_pm2_5_lc_88128,
-    magnesium = magnesium_pm2_5_lc_88140,
-    manganese = manganese_pm2_5_lc_88132,
-    nickel = nickel_pm2_5_lc_88136,
-    selenium = selenium_pm2_5_lc_88154,
-    silicon = silicon_pm2_5_lc_88165,
-    sulfate = sulfate_pm2_5_lc_88403,
-    sulfur = sulfur_pm2_5_lc_88169,
-    titanium = titanium_pm2_5_lc_88161,
-    nitrates = total_nitrate_pm2_5_lc_88306,
-    vanadium = vanadium_pm2_5_lc_88164,
-    zinc = zinc_pm2_5_lc_88167
-    )
+components_all <- 
+  read_csv("./data/pm2.5_components_daily_nyc_3sites_averg.csv") %>% 
+  rename_pollutants()
 
-components_124 <- read_csv("./data/pm2.5_components_daily_nyc_site124.csv") %>% 
-  rename(
-    aluminum = aluminum_pm2_5_lc_88104, 
-    arsenic = arsenic_pm2_5_lc_88103,
-    barium = barium_pm2_5_lc_88107,
-    bromine = bromine_pm2_5_lc_88109,
-    cadmium = cadmium_pm2_5_lc_88110,
-    calcium = calcium_pm2_5_lc_88111,
-    chromium = chromium_pm2_5_lc_88112,
-    copper = copper_pm2_5_lc_88114,
-    iron = iron_pm2_5_lc_88126,
-    lead = lead_pm2_5_lc_88128,
-    magnesium = magnesium_pm2_5_lc_88140,
-    manganese = manganese_pm2_5_lc_88132,
-    nickel = nickel_pm2_5_lc_88136,
-    selenium = selenium_pm2_5_lc_88154,
-    silicon = silicon_pm2_5_lc_88165,
-    sulfate = sulfate_pm2_5_lc_88403,
-    sulfur = sulfur_pm2_5_lc_88169,
-    titanium = titanium_pm2_5_lc_88161,
-    nitrates = total_nitrate_pm2_5_lc_88306,
-    vanadium = vanadium_pm2_5_lc_88164,
-    zinc = zinc_pm2_5_lc_88167
-    )
+components_any <- 
+  read_csv("./data/pm2.5_components_daily_nyc_any3_averg.csv")
+
+components_124 <- 
+  read_csv("./data/pm2.5_components_daily_nyc_site124.csv") %>% 
+  rename_pollutants()
 
 total_pm2.5 <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv")
 
 components_any <- 
   components_any %>%
-  left_join(total_pm2.5, by = "date_local") %>%
-  select(date_local: pm2.5_total)
+  rename_pollutants %>% 
+  left_join(total_pm2.5, by = "date_local", copy = TRUE) %>%
+  select(date_local:pm2.5_total)
 
 ```
 
@@ -130,16 +92,56 @@ components_any %>%
        hjust = 0.85, size = 3, color = "grey50", layout.exp = 1) + ggtitle("Correlation Matrix: NYC Air Pollution Dataset (any available monitor")
 ```
 
-PCA any
+
+Create list of datasets and scale for PCA
 
 ```{r}
 
-components_any <- 
-  components_any %>% 
-  select(-date_local, -pm2.5_total)
+list_components =
+  list(
+    all = components_all %>% select(-X1, -date_local),
+    any = components_any %>% select(-date_local),
+    queens = components_124 %>% select(-X1, -date_local)
+  )
 
-pca_any <- 
-  prcomp(components_any)
+list_components_df = 
+  tibble(
+    name = c("all", "any", "queens"),
+    dataset = list_components
+  )
+
+scale_pollutants = function(df){
+  data = df %>% 
+    scale(center = FALSE, scale = apply(data = df, 2, sd, na.rm = TRUE))
+  
+}
+
+#list_components_df = 
+#  list_components_df %>% 
+#  mutate(
+#    dataset = 
+#      map(.x = list_components_df$dataset, ~ scale(.x, center = FALSE, scale = apply(.x, 2, sd, na.rm = TRUE)))
+#  )
+
+```
+
+
+PCA 
+
+```{r eval=FALSE, include=FALSE}
+
+list_components_df =
+  list_components_df %>% 
+  mutate(
+    PCA = map(list_components$dataset, prcomp)
+  )
+
+PCA_list <- map(list_components$dataset, prcomp)
+
+
+components_any %>% 
+  select(-date_local, -pm2.5_total) %>% 
+  prcomp()
 
 summary(pca_any)
 
@@ -219,7 +221,7 @@ scores_pca <- pca_124$x
 
 summary statistics and visualizations
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 PCA_any <- pca_any$sdev^2/sum(pca_any$sdev^2) *100
 PCA_all <- pca_any$sdev^2/sum(pca_all$sdev^2) *100
 PCA_124 <- pca_any$sdev^2/sum(pca_124$sdev^2) *100
