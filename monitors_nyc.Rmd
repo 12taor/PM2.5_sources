@@ -14,6 +14,7 @@ library(ggcorrplot)
 library(gplots)
 library(GGally)
 library(knitr)
+library(patchwork)
 
 knitr::opts_chunk$set(
 	fig.asp = 0.6,
@@ -126,23 +127,23 @@ list_components_df =
 ```
 
 
-```{r}
-list_components_df$dataset$all %>% 
-  ggplot(aes(x = pollutant, y = concentration)) +
-  geom_boxplot()
-
-```
-
-
-
 PCA any
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 
 components_any <- 
   components_any %>% 
   rename_pollutants() %>% 
-  select(-X1, -date_local)
+  select(-X1, -date_local, -sulfur)
+
+boxplot_any <- 
+  components_any %>% 
+  pivot_longer(aluminum:zinc,
+               names_to = "pollutant",
+               values_to = "concentration") %>% 
+  ggplot(aes(y = pollutant, x = concentration, color = pollutant)) +
+  geom_boxplot() +
+  theme(legend.position = "none")
 
 pca_any <- 
   components_any %>%
@@ -173,7 +174,16 @@ PCA all
 ```{r}
 components_all <- 
   components_all %>% 
-  select(-date_local, -X1)
+  select(-date_local, -X1, -sulfur)
+
+boxplot_all <- 
+  components_all %>% 
+  pivot_longer(aluminum:zinc,
+               names_to = "pollutant",
+               values_to = "concentration") %>% 
+  ggplot(aes(y = pollutant, x = concentration, color = pollutant)) +
+  geom_boxplot() +
+  theme(legend.position = "none")
 
 pca_all <- 
   components_all %>% 
@@ -203,7 +213,16 @@ PCA queens
 ```{r}
 components_124 <- 
   components_124 %>% 
-  select(-date_local, -X1)
+  select(-date_local, -X1, -sulfur)
+
+boxplot_124 <- 
+  components_124 %>% 
+  pivot_longer(aluminum:zinc,
+               names_to = "pollutant",
+               values_to = "concentration") %>% 
+  ggplot(aes(y = pollutant, x = concentration, color = pollutant)) +
+  geom_boxplot() +
+  theme(legend.position = "none")
 
 pca_124 <- 
   components_124 %>% 
@@ -231,11 +250,14 @@ scores_pca <- pca_124$x
 
 summary statistics and visualizations
 
-```{r eval=FALSE, include=FALSE}
+```{r}
+
+boxplot_any + boxplot_any + boxplot_124
+
 PCA_any <- pca_any$sdev^2/sum(pca_any$sdev^2) *100
 PCA_all <- pca_all$sdev^2/sum(pca_all$sdev^2) *100
 PCA_124 <- pca_124$sdev^2/sum(pca_124$sdev^2) *100
-round(cbind(Component = 1:21, PCA_any, PCA_all, PCA_124), 4) %>% kable()
+round(cbind(Component = 1:20, PCA_any, PCA_all, PCA_124), 4) %>% kable()
 ```
 
 geometry column in R with coordinates
