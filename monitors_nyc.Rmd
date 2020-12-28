@@ -1,7 +1,7 @@
 ---
 title: "Explore AQS monitor datasets"
 author: Rachel Tao
-output: html_document
+output: github_document
 
 ---
 
@@ -15,6 +15,7 @@ library(gplots)
 library(GGally)
 library(knitr)
 library(patchwork)
+library(ggridges)
 
 knitr::opts_chunk$set(
 	fig.asp = 0.6,
@@ -25,16 +26,13 @@ theme_set(theme_minimal() + theme(legend.position = "bottom"))
 
 options(
   ggplot2.continuous.colour = "viridis",
-  ggplot2.continuous.fill = "viridis"
-)
+  ggplot2.continuous.fill = "viridis")
 
-scale_colour_discrete = scale_colour_viridis_d
-scale_fill_discrete = scale_fill_viridis_d
+#scale_colour_discrete = scale_colour_viridis_d
+#scale_fill_discrete = scale_fill_viridis_d
 ```
 
-load data
-
-```{r}
+```{r load data, message=FALSE, warning=FALSE, include=FALSE}
 
 rename_pollutants = function(df){
   data = df %>% 
@@ -84,66 +82,25 @@ components_any_tot <-
 
 ```
 
-Correlation matrix using dataset including any available monitors
 
-```{r}
+```{r echo=FALSE, warning=FALSE}
 components_any_tot %>% 
+  select(-sulfur, -pm2.5_total) %>% 
   ggcorr(method = c("everything", "spearman"), limits = FALSE,
-       label = TRUE, label_size = 3, label_alpha = TRUE,
-       hjust = 0.85, size = 3, color = "grey50", layout.exp = 1) + ggtitle("Correlation Matrix: NYC Air Pollution Dataset (any available monitor")
-```
-
-
-Create list of datasets for summary statistics and visualizations
-
-```{r}
-
-list_components =
-  list(
-    all = components_all %>% 
-      select(-X1, -date_local) %>% 
-      pivot_longer(aluminum:zinc,
-                   names_to = "pollutant",
-                   values_to = "concentration"),
-    any = components_any %>% 
-      select(-date_local) %>% 
-      rename_pollutants() %>% 
-      pivot_longer(aluminum:zinc,
-                   names_to = "pollutant",
-                   values_to = "concentration"),
-    queens = components_124 %>% 
-      select(-X1, -date_local) %>% 
-      pivot_longer(aluminum:zinc,
-                   names_to = "pollutant",
-                   values_to = "concentration")
-  )
-
-list_components_df = 
-  tibble(
-    name = c("all", "any", "queens"),
-    dataset = list_components
-  )
-
+       label = TRUE, label_size = 2, label_alpha = 0.75, geom = "tile",
+       hjust = 0.85, size = 3, color = "grey25", legend.size = 8, layout.exp = 3) + 
+       ggtitle("Correlation Matrix: NYC Air Pollution Dataset \n (any available monitor)")
 ```
 
 
 PCA any
 
-```{r}
+```{r echo=FALSE}
 
 components_any <- 
   components_any %>% 
   rename_pollutants() %>% 
   select(-X1, -date_local, -sulfur)
-
-boxplot_any <- 
-  components_any %>% 
-  pivot_longer(aluminum:zinc,
-               names_to = "pollutant",
-               values_to = "concentration") %>% 
-  ggplot(aes(y = pollutant, x = concentration, color = pollutant)) +
-  geom_boxplot() +
-  theme(legend.position = "none")
 
 pca_any <- 
   components_any %>%
@@ -152,7 +109,8 @@ pca_any <-
 
 summary(pca_any)
 
-pca_any$rotation %>% 
+loadings_any <- 
+  pca_any$rotation %>% 
   as_tibble() %>% 
   mutate(Chemicals = colnames(components_any)) %>% 
   select(Chemicals, PC1:PC6) %>% 
@@ -163,7 +121,8 @@ pca_any$rotation %>%
   facet_wrap(.~Component) + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "bottom",
-        strip.background = element_blank())
+        strip.background = element_blank()) +
+  ggtitle("Any available monitor")
 
 scores_pca <- pca_any$x
 
@@ -171,19 +130,10 @@ scores_pca <- pca_any$x
 
 PCA all
 
-```{r}
+```{r echo=FALSE}
 components_all <- 
   components_all %>% 
   select(-date_local, -X1, -sulfur)
-
-boxplot_all <- 
-  components_all %>% 
-  pivot_longer(aluminum:zinc,
-               names_to = "pollutant",
-               values_to = "concentration") %>% 
-  ggplot(aes(y = pollutant, x = concentration, color = pollutant)) +
-  geom_boxplot() +
-  theme(legend.position = "none")
 
 pca_all <- 
   components_all %>% 
@@ -192,7 +142,8 @@ pca_all <-
 
 summary(pca_all)
 
-pca_all$rotation %>% 
+loadings_all <- 
+  pca_all$rotation %>% 
   as_tibble() %>% 
   mutate(Chemicals = colnames(components_all)) %>% 
   select(Chemicals, PC1:PC6) %>% 
@@ -203,26 +154,18 @@ pca_all$rotation %>%
   facet_wrap(.~Component) + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "bottom",
-        strip.background = element_blank())
+        strip.background = element_blank()) +
+  ggtitle("All Monitors")
 
 scores_pca <- pca_all$x
 ```
 
 PCA queens
 
-```{r}
+```{r echo=FALSE}
 components_124 <- 
   components_124 %>% 
   select(-date_local, -X1, -sulfur)
-
-boxplot_124 <- 
-  components_124 %>% 
-  pivot_longer(aluminum:zinc,
-               names_to = "pollutant",
-               values_to = "concentration") %>% 
-  ggplot(aes(y = pollutant, x = concentration, color = pollutant)) +
-  geom_boxplot() +
-  theme(legend.position = "none")
 
 pca_124 <- 
   components_124 %>% 
@@ -231,7 +174,8 @@ pca_124 <-
 
 summary(pca_all)
 
-pca_124$rotation %>% 
+loadings_124 <-   
+  pca_124$rotation %>% 
   as_tibble() %>% 
   mutate(Chemicals = colnames(components_124)) %>% 
   select(Chemicals, PC1:PC6) %>% 
@@ -242,18 +186,127 @@ pca_124$rotation %>%
   facet_wrap(.~Component) + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
         legend.position = "bottom",
-        strip.background = element_blank())
+        strip.background = element_blank()) +
+  ggtitle("Queens Monitor")
 
 scores_pca <- pca_124$x
 ```
 
+### Loadings
 
-summary statistics and visualizations
+```{r echo=FALSE}
+loadings_any
+loadings_all
+loadings_124
+```
 
-```{r}
+### Distribution
 
-boxplot_any + boxplot_any + boxplot_124
+```{r echo=FALSE}
+components_any <- 
+  components_any %>% 
+  mutate(
+    dataset = "any_monitor"
+  )
 
+components_all <- 
+  components_all %>% 
+  mutate(
+    dataset = "all_monitors"
+  )
+
+components_124 <- 
+components_124 %>% 
+  mutate(
+    dataset = "queens_monitor"
+  )
+
+components <- 
+  bind_rows(components_any, components_all, components_124) %>% 
+  pivot_longer(aluminum:zinc,
+    names_to = "pollutant",
+    values_to  = "concentration"
+  )
+
+components95 <- 
+  bind_rows(components_any, components_all, components_124) %>% 
+  filter(
+    aluminum < quantile(aluminum, 0.95),
+    arsenic < quantile(arsenic, 0.95),
+    barium < quantile(barium, 0.95),
+    bromine < quantile(bromine, 0.95),
+    cadmium < quantile(cadmium, 0.95),
+    calcium < quantile(calcium, 0.95),
+    chromium < quantile(chromium, 0.95),
+    copper < quantile(copper, 0.95),
+    iron < quantile(iron, 0.95),
+    lead < quantile(lead, 0.95),
+    magnesium < quantile(magnesium, 0.95),
+    manganese < quantile(manganese, 0.95),
+    nickel < quantile(nickel, 0.95),
+    nitrates < quantile(nitrates, 0.95),
+    selenium < quantile(selenium, 0.95),
+    silicon < quantile(silicon, 0.95),
+    sulfate < quantile(sulfate, 0.95),
+    titanium < quantile(titanium, 0.95),
+    vanadium < quantile(vanadium, 0.95),
+    zinc < quantile(zinc, 0.95)
+    ) %>% 
+  pivot_longer(aluminum:zinc,
+    names_to = "pollutant",
+    values_to  = "concentration"
+  )
+
+components %>% 
+  ggplot(aes(x = concentration, y = dataset, fill = dataset)) +
+  geom_violin(alpha = 0.5, trim = FALSE) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  theme(axis.title = element_blank()) +
+  ggtitle("Violin Plots: Full distributions all 3 datasets") +
+  theme(
+    axis.text = element_text(size = 4),
+    axis.title.y.left = element_text(size = 0))
+
+components %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_density(alpha = 0.5, trim = TRUE, position = "identity") +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Density Plots: Full distributions all 3 datasets") +
+  theme(
+    axis.text = element_text(size = 4)) 
+
+components95 %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_density(alpha = 0.5, trim = TRUE, position = "identity") +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Density Plots: Bottom 95th%ile all 3 datasets") +
+  theme(
+    axis.text = element_text(size = 4))
+
+
+components95 %>% 
+  filter(dataset != 'queens_monitor') %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_density(alpha = 0.5, trim = TRUE) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Density Plots: All vs. Any") +
+  theme(
+    axis.text = element_text(size = 4))
+
+
+components95 %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 0.001) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Histograms bin = 0.001") +
+  theme(
+    axis.text = element_text(size = 4))
+
+
+```
+
+
+```{r echo=FALSE}
 PCA_any <- pca_any$sdev^2/sum(pca_any$sdev^2) *100
 PCA_all <- pca_all$sdev^2/sum(pca_all$sdev^2) *100
 PCA_124 <- pca_124$sdev^2/sum(pca_124$sdev^2) *100
