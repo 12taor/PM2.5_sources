@@ -4,6 +4,14 @@ Rachel Tao
 
 <img src="monitors_nyc_files/figure-gfm/unnamed-chunk-1-1.png" width="90%" />
 
+### Missingness over time
+
+    ## Warning: Removed 22 row(s) containing missing values (geom_path).
+
+    ## Warning: Removed 184 row(s) containing missing values (geom_path).
+
+<img src="monitors_nyc_files/figure-gfm/unnamed-chunk-2-1.png" width="90%" />
+
 PCA any
 
     ## Importance of components:
@@ -54,11 +62,11 @@ PCA queens
 
 ### Loadings
 
-<img src="monitors_nyc_files/figure-gfm/unnamed-chunk-5-1.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-5-2.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-5-3.png" width="90%" />
+<img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-1.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-2.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-3.png" width="90%" />
 
 ### Distribution
 
-<img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-1.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-2.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-3.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-4.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-6-5.png" width="90%" />
+<img src="monitors_nyc_files/figure-gfm/unnamed-chunk-7-1.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-7-2.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-7-3.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-7-4.png" width="90%" /><img src="monitors_nyc_files/figure-gfm/unnamed-chunk-7-5.png" width="90%" />
 
 | Component | PCA\_any | PCA\_all | PCA\_124 |
 | --------: | -------: | -------: | -------: |

@@ -15,7 +15,7 @@ library(gplots)
 library(GGally)
 library(knitr)
 library(patchwork)
-library(ggridges)
+library(dygraphs)
 
 knitr::opts_chunk$set(
 	fig.asp = 0.6,
@@ -90,6 +90,52 @@ components_any_tot %>%
        label = TRUE, label_size = 2, label_alpha = 0.75, geom = "tile",
        hjust = 0.85, size = 3, color = "grey25", legend.size = 8, layout.exp = 3) + 
        ggtitle("Correlation Matrix: NYC Air Pollution Dataset \n (any available monitor)")
+```
+
+### Missingness over time
+
+```{r echo=FALSE, message=FALSE}
+time_any <-   
+  components_any %>% 
+  select(date_local) %>% 
+  mutate(
+    any_monitor = 1
+  )
+
+time_all <- 
+  components_all %>% 
+  select(date_local) %>% 
+  mutate(
+    all_monitors = 2
+  )
+
+time_queens <- 
+  components_124 %>% 
+  select(date_local) %>% 
+  mutate(
+    queens_monitor = 3
+  )
+
+time <- 
+  left_join(time_any, time_all, by = "date_local") %>% 
+  left_join(time_queens, by = "date_local")
+
+time %>% 
+  ggplot(aes(date_local, any_monitor, color = "darkgreen")) +
+  geom_line() +
+  geom_line(data = time, aes(y = queens_monitor, color = "blue")) +
+  geom_line(data = time, aes(y = all_monitors, color = "red")) +
+  theme(legend.position = "right",
+        axis.title = element_blank(),
+        axis.text.y = element_blank()) +
+  scale_color_identity(name = "Dataset",
+                       breaks = c("blue", "red", "darkgreen"),
+                       labels = c("Queens monitor", "All monitors", "Any monitor"),
+                       guide = "legend") +
+  ylim(0, 4)
+
+#this is not quite right - I need to start with a column that includes all dates 2000-2015 so we can see missingness in the 'any monitor' dataset.
+
 ```
 
 
@@ -289,7 +335,7 @@ components95 %>%
   ggplot(aes(x = concentration, fill = dataset)) +
   geom_density(alpha = 0.5, trim = TRUE) +
   facet_wrap(. ~pollutant, scales = "free") +
-  ggtitle("Density Plots: All vs. Any") +
+  ggtitle("Density Plots: All vs. Any, Bottom 95th%ile") +
   theme(
     axis.text = element_text(size = 4))
 
