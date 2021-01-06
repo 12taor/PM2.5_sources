@@ -2,7 +2,6 @@
 title: "Explore AQS monitor datasets"
 author: Rachel Tao
 output: github_document
-
 ---
 
 ```{r setup, include = FALSE}
@@ -15,7 +14,7 @@ library(gplots)
 library(GGally)
 library(knitr)
 library(patchwork)
-library(dygraphs)
+library(leaflet)
 
 knitr::opts_chunk$set(
 	fig.asp = 0.6,
@@ -82,19 +81,20 @@ components_any_tot <-
 
 ```
 
+```{r correlation matrix code, echo=FALSE, warning=FALSE}
 
-```{r echo=FALSE, warning=FALSE}
-components_any_tot %>% 
+correlation_matrix <-   
+  components_any_tot %>% 
   select(-sulfur, -pm2.5_total) %>% 
   ggcorr(method = c("everything", "spearman"), limits = FALSE,
        label = TRUE, label_size = 2, label_alpha = 0.75, geom = "tile",
        hjust = 0.85, size = 3, color = "grey25", legend.size = 8, layout.exp = 3) + 
-       ggtitle("Correlation Matrix: NYC Air Pollution Dataset \n (any available monitor)")
+       ggtitle("Any available monitor")
+
 ```
 
-### Missingness over time
 
-```{r echo=FALSE, message=FALSE}
+```{r missingness over time, echo=FALSE, message=FALSE, warning=FALSE}
 time_any <-   
   components_any %>% 
   select(date_local) %>% 
@@ -116,32 +116,28 @@ time_queens <-
     queens_monitor = 3
   )
 
+dates <- tibble(seq(as.Date('2000-01-01'), as.Date('2015-12-31'), by = "days")) %>% 
+  rename(date_local = 'seq(as.Date("2000-01-01"), as.Date("2015-12-31"), by = "days")')
+
 time <- 
-  left_join(time_any, time_all, by = "date_local") %>% 
+  left_join(dates, time_any, by = "date_local") %>% 
+  left_join(time_all, by = "date_local") %>% 
   left_join(time_queens, by = "date_local")
 
-time %>% 
-  ggplot(aes(date_local, any_monitor, color = "darkgreen")) +
-  geom_line() +
-  geom_line(data = time, aes(y = queens_monitor, color = "blue")) +
-  geom_line(data = time, aes(y = all_monitors, color = "red")) +
-  theme(legend.position = "right",
-        axis.title = element_blank(),
-        axis.text.y = element_blank()) +
-  scale_color_identity(name = "Dataset",
-                       breaks = c("blue", "red", "darkgreen"),
-                       labels = c("Queens monitor", "All monitors", "Any monitor"),
-                       guide = "legend") +
-  ylim(0, 4)
-
-#this is not quite right - I need to start with a column that includes all dates 2000-2015 so we can see missingness in the 'any monitor' dataset.
+missingness <- 
+  time %>% 
+  ggplot(aes(date_local)) +
+  geom_point(data = time, aes(y = any_monitor, color = "darkgreen"), size = 0.5, alpha = 0.2) +
+  geom_point(data = time, aes(y = queens_monitor, color = "blue"), size = 0.5, alpha = 0.2) +
+  geom_point(data = time, aes(y = all_monitors, color = "red"), size = 0.5, alpha = 0.2) +
+  scale_y_discrete(name = "Dataset", c("1.0", "2.0", "3.0"), c("Any monitor", "All monitors", "Queens monitor"), limits = c("1.0", "2.0", "3.0")) +
+  theme(legend.position = "none") +
+  xlab("Date")
 
 ```
 
 
-PCA any
-
-```{r echo=FALSE}
+```{r PCA (any available monitor), echo=FALSE}
 
 components_any <- 
   components_any %>% 
@@ -152,8 +148,6 @@ pca_any <-
   components_any %>%
   scale(center = FALSE, scale = apply(components_any, 2, sd, na.rm = TRUE)) %>% 
   prcomp()
-
-summary(pca_any)
 
 loadings_any <- 
   pca_any$rotation %>% 
@@ -174,9 +168,8 @@ scores_pca <- pca_any$x
 
 ```
 
-PCA all
 
-```{r echo=FALSE}
+```{r PCA (all monitors available), echo=FALSE}
 components_all <- 
   components_all %>% 
   select(-date_local, -X1, -sulfur)
@@ -185,8 +178,6 @@ pca_all <-
   components_all %>% 
   scale(center = FALSE, scale = apply(components_all, 2, sd, na.rm = TRUE)) %>% 
   prcomp()
-
-summary(pca_all)
 
 loadings_all <- 
   pca_all$rotation %>% 
@@ -206,9 +197,8 @@ loadings_all <-
 scores_pca <- pca_all$x
 ```
 
-PCA queens
 
-```{r echo=FALSE}
+```{r PCA (queens monitor), echo=FALSE}
 components_124 <- 
   components_124 %>% 
   select(-date_local, -X1, -sulfur)
@@ -217,8 +207,6 @@ pca_124 <-
   components_124 %>% 
   scale(center = FALSE, scale = apply(components_124, 2, sd, na.rm = TRUE)) %>% 
   prcomp()
-
-summary(pca_all)
 
 loadings_124 <-   
   pca_124$rotation %>% 
@@ -238,15 +226,34 @@ loadings_124 <-
 scores_pca <- pca_124$x
 ```
 
-### Loadings
+### Map of monitor locations
 
-```{r echo=FALSE}
-loadings_any
-loadings_all
-loadings_124
+```{r map, echo=FALSE, message=FALSE}
+monitor_locations <- 
+  read_csv("./data/monitor_sites.csv") %>% 
+  mutate(site_number = as.character(site_number))
+
+map <- leaflet(monitor_locations) %>% 
+  addProviderTiles("CartoDB.PositronNoLabels") %>% 
+  addCircleMarkers(lng=~longitude, lat=~latitude, label =~site_number)
+
+map
+
 ```
 
+### Data availability over time at each monitor
+
+```{r echo=FALSE, warning=FALSE}
+missingness
+```
+
+The 'all monitors' dataset starts later than the other two datasets (around 2003) and also includes a gap of about 2-3 years from 2011-2014. The queens monitor and 'any monitor' dataset have full data 2001 onwards. For analyses, we should use the 'any monitors' dataset or the queens dataset so that we have data for the entire period of interest.
+
 ### Distribution
+
+##### NOTES (potential measurement error):
+ - arsenic and selenium are not well-measured by the instrument
+ - sodium and sulfate are highly correlated because they have similar frequencies
 
 ```{r echo=FALSE}
 components_any <- 
@@ -303,6 +310,11 @@ components95 <-
     values_to  = "concentration"
   )
 
+```
+
+As a first pass, we can look at the distributions of each dataset side-by-side for each chemical:
+
+```{r violin, echo=FALSE}
 components %>% 
   ggplot(aes(x = concentration, y = dataset, fill = dataset)) +
   geom_violin(alpha = 0.5, trim = FALSE) +
@@ -312,7 +324,11 @@ components %>%
   theme(
     axis.text = element_text(size = 4),
     axis.title.y.left = element_text(size = 0))
+```
 
+Now, let's try an overlaid density plot to get a better sense of the distributions:
+
+```{r density 1, echo=FALSE}
 components %>% 
   ggplot(aes(x = concentration, fill = dataset)) +
   geom_density(alpha = 0.5, trim = TRUE, position = "identity") +
@@ -320,7 +336,11 @@ components %>%
   ggtitle("Density Plots: Full distributions all 3 datasets") +
   theme(
     axis.text = element_text(size = 4)) 
+```
 
+The full distributions for many chemicals have long right tails, so it might be easier to visualize if we just take the bottom 95th%ile:
+
+```{r density 2, echo=FALSE}
 components95 %>% 
   ggplot(aes(x = concentration, fill = dataset)) +
   geom_density(alpha = 0.5, trim = TRUE, position = "identity") +
@@ -328,8 +348,11 @@ components95 %>%
   ggtitle("Density Plots: Bottom 95th%ile all 3 datasets") +
   theme(
     axis.text = element_text(size = 4))
+```
 
+It looks like the Queens monitor is the only one that has a slightly different distribution across pollutants. Let's compare just the 'any' and 'all' datasets to see if their distributions match up when we remove the queens monitor's distribution:
 
+```{r density 3, echo=FALSE}
 components95 %>% 
   filter(dataset != 'queens_monitor') %>% 
   ggplot(aes(x = concentration, fill = dataset)) +
@@ -339,7 +362,11 @@ components95 %>%
   theme(
     axis.text = element_text(size = 4))
 
+```
 
+Some of the density plots (especially for the low-concentration pollutants at the queens monitor) have 'bumpy' distributions. Is this a true signal or is it because the unit of measurement is 0.0001?
+
+```{r histogram, echo=FALSE}
 components95 %>% 
   ggplot(aes(x = concentration, fill = dataset)) +
   geom_histogram(alpha = 0.5, position = "identity", binwidth = 0.001) +
@@ -347,10 +374,31 @@ components95 %>%
   ggtitle("Histograms bin = 0.001") +
   theme(
     axis.text = element_text(size = 4))
-
-
 ```
 
+Although these histograms make it difficult to see the distributions for higher-concentration pollutants, we can see that the pollutants with lower concentrations no longer have the 'bumpy' distributions. Using a smaller bin size, we see similar patterns as in the density plot:
+
+```{r histogram 2, echo=FALSE}
+components95 %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 0.0005) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Histograms bin = 0.0005") +
+  theme(
+    axis.text = element_text(size = 4))
+```
+
+Based on the density plots, the 'any monitor available' and the 'all monitors' datasets appear to have similar distributions for all chemicals. The queens monitor has a slightly different distribution. Since the queens monitor has data availability for the entire study period, and the 'any monitor' dataset has variable numbers of observations per date, so we can use the 'any monitor' dataset for analyses and do a sensitivity analysis using the queens monitor dataset.
+
+### Correlation Matrix
+
+```{r correlation matrix, echo=FALSE}
+correlation_matrix
+```
+
+Correlations range from -0.1 to 0.7.
+
+### Principal Components Analysis
 
 ```{r echo=FALSE}
 PCA_any <- pca_any$sdev^2/sum(pca_any$sdev^2) *100
@@ -359,4 +407,21 @@ PCA_124 <- pca_124$sdev^2/sum(pca_124$sdev^2) *100
 round(cbind(Component = 1:20, PCA_any, PCA_all, PCA_124), 4) %>% kable()
 ```
 
-geometry column in R with coordinates
+The proportion of variation for each component is similar across datasets. This suggests that it is likely reasonable to assume that when use other dimensionality reduction techniques with the 'any monitor' dataset, the results would be similar if we used the 'all monitors' dataset or the queens dataset. The loadings are also similar across datasets.
+
+### Loadings
+
+```{r echo=FALSE}
+loadings_any
+```
+
+```{r echo=FALSE}
+loadings_all
+```
+
+```{r echo=FALSE}
+loadings_124
+```
+
+Most chemicals load on the first component for all 3 monitors. 
+
