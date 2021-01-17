@@ -1,0 +1,271 @@
+---
+title: "APCA"
+author: "Rachel Tao"
+date: "1/2/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(ggcorrplot)
+library(gplots)
+library(GGally)
+library(knitr)
+library(patchwork)
+library(psych)
+library(factoextra)
+
+knitr::opts_chunk$set(
+	fig.asp = 0.6,
+	fig.width = 6,
+	out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+```
+
+Load in data
+
+```{r echo=FALSE}
+
+conc <- read_csv("./data/concentrations9910.csv") %>% 
+  mutate(
+    date = as.Date(date, "%m/%d/%Y"))
+
+i <- c(2:22)
+conc[ , i] <- apply(conc[ , i], 2,
+                    function(x)
+                      x*1000)
+
+```
+
+Means, correlations and variances
+
+```{r}
+conc_corr <- 
+  conc %>% 
+  select(-date)
+
+corr <- 
+  summarize(conc_corr, corr = cor(conc_corr, use = "pairwise.complete.obs"))
+
+conc_summarize <- 
+  conc_corr %>% 
+  pivot_longer(everything(),
+               names_to = "element",
+               values_to = "concentration") %>% 
+  group_by(element)
+
+means <- conc_summarize %>% 
+  summarize(mean = mean(concentration, na.rm = TRUE)) %>% 
+  arrange(element)
+
+vars <- conc_summarize %>% 
+  summarize(variance = var(concentration, na.rm = TRUE)) %>% 
+  arrange(element)
+
+```
+
+Scaled factor analysis
+
+```{r}
+zspec_pm25 <- 
+  conc %>% 
+  select(-date, -pm25, -K) %>% 
+  scale(center = TRUE, scale = TRUE)
+
+factors <- 
+  fa(zspec_pm25,
+     nfactors = 6, max.iter = 500,
+     rotate = "varimax",
+     scores = "regression",
+     SMC  = TRUE,
+     fm = "pa")
+
+fact <- as_tibble(factors$scores)
+loadings <- print(factors$loadings, cutoff = 0)
+factor_stat <- factors$weights %>% 
+  as_tibble(rownames = NA) %>% 
+  rownames_to_column("element") %>% 
+  arrange(element)
+
+```
+
+
+```{r}
+coeff <- left_join(means, vars, by = "element") %>% 
+  left_join(factor_stat, by = "element")
+
+min <- coeff %>% 
+  pivot_longer(contains("PA"),
+               names_to = "factor_num",
+               names_prefix = "PA",
+               values_to = "factor_coeff") %>% 
+  mutate(minimum = factor_coeff*(-mean/(variance^(1/2)))) %>% 
+  select(element, factor_num, minimum) %>% 
+  group_by(factor_num) %>% 
+  summarize(sum = sum(minimum, na.rm = TRUE)) %>% 
+  pivot_wider(factor_num:sum,
+              names_from = factor_num,
+              names_prefix = "minimum_",
+              values_from = sum)
+  
+
+```
+
+reattach factor scores to dates
+
+```{r}
+a <- conc %>% 
+  select(date) %>% 
+  cbind(fact) %>% 
+  pivot_longer(contains("PA"),
+               names_to = "factor_num",
+               names_prefix = "PA",
+               values_to = "factor_score") %>% 
+  mutate(factor_num = as.numeric(factor_num)) %>% 
+  cbind(min) %>% 
+  pivot_longer(contains("minimum"),
+               names_to = "min_num",
+               names_prefix = "minimum_",
+               values_to = "minimum") %>% 
+  mutate(min_num = as.numeric(min_num)) %>% 
+  filter(factor_num == min_num) %>% 
+  mutate(factor_score = factor_score - minimum) %>% 
+  select(-min_num, -minimum)
+
+factor_means <- a %>% 
+  select(factor_num, factor_score) %>% 
+  group_by(factor_num) %>% 
+  summarize(mean_score = mean(factor_score, na.rm = TRUE))
+
+```
+
+Regress each element (starting with aluminum) on factors to see source contribution
+
+What I want is to go from pm25 to Pb (8:28)
+
+```{r}
+
+#this part is for iterating over each chemical
+
+x <- a %>% 
+  pivot_wider(everything(),
+              names_from = factor_num,
+              names_prefix = "factor_",
+              values_from = factor_score) %>% 
+  select(contains("factor")) %>% as.matrix()
+
+regress = function(y) {
+  
+  z = lm(y ~ x)
+  
+  r.squared = broom::glance(z) %>% select(r.squared)
+
+  betas = broom::tidy(z) %>% pivot_wider(term:estimate,
+                                         names_from = "term",
+                                         values_from = "estimate")
+  
+  return(cbind(r.squared, betas))
+  
+}
+
+y <- conc %>% select(-date)
+
+# regress(conc$Al)
+
+# i <- c(8:28)
+
+regress <- map(y, regress) %>% 
+  enframe(name = "element") %>% 
+  unnest(c(value)) %>% 
+  janitor::clean_names() %>% 
+  rename_at(vars(contains("factor")), funs(str_replace(., "xfactor", "beta")))
+
+betas <- regress %>% 
+  select(element, starts_with("beta")) %>% 
+  nest(betas = starts_with("beta"))
+
+# what happens to the r.squared value?
+
+
+```
+
+combine betas with factor scores for final datasets
+
+```{r}
+# make a separate dataset for each chemical (use map?)
+
+
+Al <- betas %>% filter(element == 'Al')
+
+
+# 
+# i <- c(1:21)
+# betas[ i, ] <- apply(betas[ i, ], 1,
+#                     function(x)
+#                       as.character(x))
+# 
+# betas <- map(a[ , i], regress)
+
+
+sources = lapply(betas$betas, cbind, a)
+
+names(sources) <- betas$element
+
+lapply(sources, as_tibble)
+
+# need to figure out how to iterate over the following:
+sources1 <- sources[["Al"]] %>% 
+  pivot_longer(starts_with("beta"),
+               names_to = "beta_num",
+               names_prefix = "beta_",
+               values_to = "beta_value") %>% 
+  mutate(
+    beta_num = as.numeric(beta_num)
+  ) %>% 
+  filter(factor_num == beta_num) %>% 
+  mutate(
+    srce = factor_score*beta_value
+  ) %>% 
+  mutate(srce_num = as.character(beta_num)) %>% 
+  select(date, srce_num, srce) 
+
+
+# need to add back r.squared value here
+
+mean_source <- full_join(sources, conc, by = "date") %>% 
+  group_by(srce_num) %>%
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(Al, na.rm = TRUE)) %>% #also here!
+  pivot_wider(srce_num:MeanConc,
+              names_from = "srce_num",
+              names_prefix = "source_",
+              values_from = "source_mean")
+
+SA_Varimax <- mean_source %>% 
+  mutate(
+    PredConc = reduce(select(., contains("source")), `+`),
+    Pct_error = (PredConc - MeanConc)/MeanConc
+  )
+
+```
+
+also extract loadings
+
+PM2.5 regression gives contribution of each source to total pm2.5
+
+Do general time series of PM2.5 and MI
+Total PM2.5 and MI
+APCA, PCP, PCP + APCA?
+when running APCA for NYC, extract loadings and for each source contribution look at seasonal patterns (break calendar into 4 seasons of 3 months each), look at concentrations/contributions by season (traffic higher in winter, regional in winter), day of week (traffic higher on weekdays)
+scores: correlations between sources and PM2.5 + patterns
