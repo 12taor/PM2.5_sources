@@ -32,6 +32,7 @@ conc <- read_csv("./data/concentrations9910.csv") %>%
   mutate(
     date = as.Date(date, "%m/%d/%Y"))
 
+# multiply all concentrations by 1000 for units
 i <- c(2:22)
 conc[ , i] <- apply(conc[ , i], 2,
                     function(x)
@@ -66,18 +67,17 @@ vars <- conc_summarize %>%
 
 ```
 
-Scaled factor analysis
+Scaled factor analysis - must provide number of factors here
 
 ```{r}
-# set mean =0, SD = 1
-
+# set mean = 0, SD = 1
+# remove potassium so that 4th of July fireworks do not alter overall results
 zspec_pm25 <- 
   conc %>% 
   select(-date, -pm25, -K) %>% 
   scale(center = TRUE, scale = TRUE)
 
-# factor analysis
-
+# factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
      nfactors = 6, max.iter = 500,
@@ -87,9 +87,8 @@ factors <-
      fm = "pa")
 
 # calculate factor scores, loadings, and weights (aka standardized scoring coefficients)
-
 fact <- as_tibble(factors$scores)
-loadings <- print(factors$loadings, cutoff = 0)
+loadings <- factors$loadings
 factor_stat <- factors$weights %>% 
   as_tibble(rownames = NA) %>% 
   rownames_to_column("element") %>% 
@@ -97,12 +96,14 @@ factor_stat <- factors$weights %>%
 
 ```
 
-fix intercept (Kavouras 2001)
+calculate absolute factor scores for each day (Equations 5-7 in statistical methods of Kavouras 2001)
 
 ```{r}
+# join standardized scoring coefficients with means and variances
 coeff <- left_join(means, vars, by = "element") %>% 
   left_join(factor_stat, by = "element")
 
+# calculate minimum values to find absolute factor scores (equations 5 and 6)
 min <- coeff %>% 
   pivot_longer(contains("PA"),
                names_to = "factor_num",
@@ -117,11 +118,8 @@ min <- coeff %>%
               names_prefix = "minimum_",
               values_from = sum)
 
-```
-
-reattach factor scores to dates
-
-```{r}
+# reattach factor scores to dates and calculate absolute factor scores for each day
+# (equation 7)
 a <- conc %>% 
   select(date) %>% 
   cbind(fact) %>% 
@@ -140,6 +138,12 @@ a <- conc %>%
   mutate(factor_score = factor_score - minimum) %>% 
   select(-min_num, -minimum)
 
+```
+
+factor means
+
+```{r}
+# this is a check - not necessary for next steps
 factor_means <- a %>% 
   select(factor_num, factor_score) %>% 
   group_by(factor_num) %>% 
@@ -150,14 +154,8 @@ factor_means <- a %>%
 Regress each element on factors to see source contribution
 
 ```{r}
-
-x <- a %>% 
-  pivot_wider(everything(),
-              names_from = factor_num,
-              names_prefix = "factor_",
-              values_from = factor_score) %>% 
-  select(contains("factor")) %>% as.matrix()
-
+# define 'regress' as regression function with y as dependent variable and x as independent variable(s)
+# return tidy output for beta values and r-squared value
 regress = function(y) {
   
   z = lm(y ~ x)
@@ -172,31 +170,45 @@ regress = function(y) {
   
 }
 
+# independent variables for regression will be factors from factor analysis. define these as 'x'
+x <- a %>% 
+  pivot_wider(everything(),
+              names_from = factor_num,
+              names_prefix = "factor_",
+              values_from = factor_score) %>% 
+  select(contains("factor")) %>% as.matrix()
+
+# dependent variable for regression will be actual element concentration. define this as y.
 y <- conc %>% select(-date)
 
-
+# repeat 'regress' for each element using 'x' as factors and 'y' as concentrations)
 regress <- map(y, regress) %>% 
   enframe(name = "element") %>% 
   unnest(c(value)) %>% 
   janitor::clean_names() %>% 
   rename_at(vars(contains("factor")), funs(str_replace(., "xfactor", "beta")))
 
+# dataset storing r-squred values
 r <- regress %>% 
   select(element, r_squared)
 
+# dataset storing beta values
 betas <- regress %>% 
   select(element, starts_with("beta")) %>% 
   nest(betas = starts_with("beta"))
 
 ```
 
-combine betas with factor scores for final datasets
+calculate source contributions
 
 ```{r}
+# combine betas with factor scores in a list 
 sources = lapply(betas$betas, cbind, a)
 
+# in the above step, element names are automatically removed. rename list elements
 names(sources) <- betas$element
 
+# calculate source contributions by multiplying absolute factor scores by beta values
 sources <- lapply(sources, as_tibble) %>% 
   bind_rows(.id = "element") %>%
   pivot_longer(starts_with("beta"),
@@ -221,6 +233,7 @@ conc_long <- conc %>%
 
 source_conc <- left_join(sources, conc_long, by = c('element', 'date'))
 
+# calculate mean source contributions for each element (is this equivalent to laodings?)
 mean_source <- source_conc %>% 
   group_by(element, srce_num) %>% 
   summarize(source_mean = mean(srce, na.rm = TRUE),
@@ -229,6 +242,18 @@ mean_source <- source_conc %>%
               names_prefix = "source_",
               values_from = "source_mean")
 
+```
+
+### Final datasets:
+ 1) original loadings from factor analysis
+ 2) mean source contributions for each element, mean predicted concentration, percent error
+ 3) source contributions to total pm2.5
+
+```{r}
+# results of factor analysis, including loadings 
+factors
+
+# calculate mean predicted concentration and percent error
 SA_Varimax <- mean_source %>% 
   ungroup(element) %>% 
   left_join(r, by = "element") %>% 
@@ -237,20 +262,19 @@ SA_Varimax <- mean_source %>%
     Pct_error = (PredConc - MeanConc)/MeanConc
   )
 
+# source contributions to total pm2.5
 pm25 <- source_conc %>% 
   filter(element == 'pm25') %>% 
   select(-element) %>% 
   pivot_wider(names_from = srce_num,
               names_prefix = "source_",
               values_from = srce)
+
 ```
 
-also extract loadings
-
-PM2.5 regression gives contribution of each source to total pm2.5
-
-Do general time series of PM2.5 and MI
-Total PM2.5 and MI
-APCA, PCP, PCP + APCA?
-when running APCA for NYC, extract loadings and for each source contribution look at seasonal patterns (break calendar into 4 seasons of 3 months each), look at concentrations/contributions by season (traffic higher in winter, regional in winter), day of week (traffic higher on weekdays)
-scores: correlations between sources and PM2.5 + patterns
+### Next steps (likely to copy into new doc):
+- Do general time series of PM2.5 and MI
+- Total PM2.5 and MI
+- APCA, PCP, PCP + APCA?
+- when running APCA for NYC, extract loadings and for each source contribution look at seasonal patterns (break calendar into 4 seasons of 3 months each), look at concentrations/contributions by season (traffic higher in winter, regional in winter), day of week (traffic higher on weekdays)
+- scores: correlations between sources and PM2.5 + patterns
