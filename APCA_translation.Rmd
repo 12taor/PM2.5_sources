@@ -6,16 +6,7 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
-library(tidyverse)
-library(lubridate)
-library(ggmap)
-library(ggcorrplot)
-library(gplots)
-library(GGally)
-library(knitr)
-library(patchwork)
-library(psych)
-library(factoextra)
+pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, gplots, GGally, knitr, patchwork, psych, factoextra)
 
 knitr::opts_chunk$set(
 	fig.asp = 0.6,
@@ -78,10 +69,14 @@ vars <- conc_summarize %>%
 Scaled factor analysis
 
 ```{r}
+# set mean =0, SD = 1
+
 zspec_pm25 <- 
   conc %>% 
   select(-date, -pm25, -K) %>% 
   scale(center = TRUE, scale = TRUE)
+
+# factor analysis
 
 factors <- 
   fa(zspec_pm25,
@@ -90,6 +85,8 @@ factors <-
      scores = "regression",
      SMC  = TRUE,
      fm = "pa")
+
+# calculate factor scores, loadings, and weights (aka standardized scoring coefficients)
 
 fact <- as_tibble(factors$scores)
 loadings <- print(factors$loadings, cutoff = 0)
@@ -100,6 +97,7 @@ factor_stat <- factors$weights %>%
 
 ```
 
+fix intercept (Kavouras 2001)
 
 ```{r}
 coeff <- left_join(means, vars, by = "element") %>% 
@@ -118,7 +116,6 @@ min <- coeff %>%
               names_from = factor_num,
               names_prefix = "minimum_",
               values_from = sum)
-  
 
 ```
 
@@ -150,13 +147,9 @@ factor_means <- a %>%
 
 ```
 
-Regress each element (starting with aluminum) on factors to see source contribution
-
-What I want is to go from pm25 to Pb (8:28)
+Regress each element on factors to see source contribution
 
 ```{r}
-
-#this part is for iterating over each chemical
 
 x <- a %>% 
   pivot_wider(everything(),
@@ -181,9 +174,6 @@ regress = function(y) {
 
 y <- conc %>% select(-date)
 
-# regress(conc$Al)
-
-# i <- c(8:28)
 
 regress <- map(y, regress) %>% 
   enframe(name = "element") %>% 
@@ -191,40 +181,24 @@ regress <- map(y, regress) %>%
   janitor::clean_names() %>% 
   rename_at(vars(contains("factor")), funs(str_replace(., "xfactor", "beta")))
 
+r <- regress %>% 
+  select(element, r_squared)
+
 betas <- regress %>% 
   select(element, starts_with("beta")) %>% 
   nest(betas = starts_with("beta"))
-
-# what happens to the r.squared value?
-
 
 ```
 
 combine betas with factor scores for final datasets
 
 ```{r}
-# make a separate dataset for each chemical (use map?)
-
-
-Al <- betas %>% filter(element == 'Al')
-
-
-# 
-# i <- c(1:21)
-# betas[ i, ] <- apply(betas[ i, ], 1,
-#                     function(x)
-#                       as.character(x))
-# 
-# betas <- map(a[ , i], regress)
-
-
 sources = lapply(betas$betas, cbind, a)
 
 names(sources) <- betas$element
 
-lapply(sources, as_tibble) 
-
-sources1 <- bind_rows(sources, .id = "element") %>%
+sources <- lapply(sources, as_tibble) %>% 
+  bind_rows(.id = "element") %>%
   pivot_longer(starts_with("beta"),
                names_to = "beta_num",
                names_prefix = "beta_",
@@ -239,32 +213,15 @@ sources1 <- bind_rows(sources, .id = "element") %>%
   mutate(srce_num = as.character(beta_num)) %>% 
   select(element, date, srce_num, srce) 
 
-# # need to figure out how to iterate over the following:
-# sources1 <- sources[["Al"]] %>% 
-#   pivot_longer(starts_with("beta"),
-#                names_to = "beta_num",
-#                names_prefix = "beta_",
-#                values_to = "beta_value") %>% 
-#   mutate(
-#     beta_num = as.numeric(beta_num)
-#   ) %>% 
-#   filter(factor_num == beta_num) %>% 
-#   mutate(
-#     srce = factor_score*beta_value
-#   ) %>% 
-#   mutate(srce_num = as.character(beta_num)) %>% 
-#   select(date, srce_num, srce) 
-
-
-# need to add back r.squared value here
-
-conc2 <- conc %>% 
-  pivot_longer(pm25:Pb,
+conc_long <- conc %>% 
+  pivot_longer(!date,
                names_to = "element",
                values_to = "concentration") %>% 
   arrange(element)
 
-mean_source <- left_join(sources1, conc2, by = c('element', 'date')) %>% 
+source_conc <- left_join(sources, conc_long, by = c('element', 'date'))
+
+mean_source <- source_conc %>% 
   group_by(element, srce_num) %>% 
   summarize(source_mean = mean(srce, na.rm = TRUE),
             MeanConc = mean(concentration, na.rm = TRUE)) %>% 
@@ -272,22 +229,20 @@ mean_source <- left_join(sources1, conc2, by = c('element', 'date')) %>%
               names_prefix = "source_",
               values_from = "source_mean")
 
-# mean_source <- full_join(sources1, conc, by = "date") %>% 
-#   group_by(element, srce_num) %>%
-#   summarize(source_mean = mean(srce, na.rm = TRUE),
-#             MeanConc = mean(Al, na.rm = TRUE)) %>% #also here!
-#   pivot_wider(srce_num:MeanConc,
-#               names_from = "srce_num",
-#               names_prefix = "source_",
-#               values_from = "source_mean")
-
 SA_Varimax <- mean_source %>% 
   ungroup(element) %>% 
+  left_join(r, by = "element") %>% 
   mutate(
     PredConc = reduce(select(., contains("source")), `+`),
     Pct_error = (PredConc - MeanConc)/MeanConc
   )
 
+pm25 <- source_conc %>% 
+  filter(element == 'pm25') %>% 
+  select(-element) %>% 
+  pivot_wider(names_from = srce_num,
+              names_prefix = "source_",
+              values_from = srce)
 ```
 
 also extract loadings
