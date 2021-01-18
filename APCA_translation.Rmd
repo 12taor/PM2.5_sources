@@ -222,10 +222,9 @@ sources = lapply(betas$betas, cbind, a)
 
 names(sources) <- betas$element
 
-lapply(sources, as_tibble)
+lapply(sources, as_tibble) 
 
-# need to figure out how to iterate over the following:
-sources1 <- sources[["Al"]] %>% 
+sources1 <- bind_rows(sources, .id = "element") %>%
   pivot_longer(starts_with("beta"),
                names_to = "beta_num",
                names_prefix = "beta_",
@@ -238,21 +237,52 @@ sources1 <- sources[["Al"]] %>%
     srce = factor_score*beta_value
   ) %>% 
   mutate(srce_num = as.character(beta_num)) %>% 
-  select(date, srce_num, srce) 
+  select(element, date, srce_num, srce) 
+
+# # need to figure out how to iterate over the following:
+# sources1 <- sources[["Al"]] %>% 
+#   pivot_longer(starts_with("beta"),
+#                names_to = "beta_num",
+#                names_prefix = "beta_",
+#                values_to = "beta_value") %>% 
+#   mutate(
+#     beta_num = as.numeric(beta_num)
+#   ) %>% 
+#   filter(factor_num == beta_num) %>% 
+#   mutate(
+#     srce = factor_score*beta_value
+#   ) %>% 
+#   mutate(srce_num = as.character(beta_num)) %>% 
+#   select(date, srce_num, srce) 
 
 
 # need to add back r.squared value here
 
-mean_source <- full_join(sources, conc, by = "date") %>% 
-  group_by(srce_num) %>%
+conc2 <- conc %>% 
+  pivot_longer(pm25:Pb,
+               names_to = "element",
+               values_to = "concentration") %>% 
+  arrange(element)
+
+mean_source <- left_join(sources1, conc2, by = c('element', 'date')) %>% 
+  group_by(element, srce_num) %>% 
   summarize(source_mean = mean(srce, na.rm = TRUE),
-            MeanConc = mean(Al, na.rm = TRUE)) %>% #also here!
-  pivot_wider(srce_num:MeanConc,
-              names_from = "srce_num",
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = "srce_num",
               names_prefix = "source_",
               values_from = "source_mean")
 
+# mean_source <- full_join(sources1, conc, by = "date") %>% 
+#   group_by(element, srce_num) %>%
+#   summarize(source_mean = mean(srce, na.rm = TRUE),
+#             MeanConc = mean(Al, na.rm = TRUE)) %>% #also here!
+#   pivot_wider(srce_num:MeanConc,
+#               names_from = "srce_num",
+#               names_prefix = "source_",
+#               values_from = "source_mean")
+
 SA_Varimax <- mean_source %>% 
+  ungroup(element) %>% 
   mutate(
     PredConc = reduce(select(., contains("source")), `+`),
     Pct_error = (PredConc - MeanConc)/MeanConc
