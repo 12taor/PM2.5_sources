@@ -1,7 +1,7 @@
 ---
-title: "APCA"
+title: "APCA NYC"
 author: "Rachel Tao"
-date: "1/2/2021"
+date: "1/23/2021"
 output: github_document
 ---
 
@@ -28,12 +28,49 @@ Load in data
 
 ```{r echo=FALSE}
 
-conc <- read_csv("./data/concentrations9910.csv") %>% 
-  mutate(
-    date = as.Date(date, "%m/%d/%Y"))
+rename_pollutants = function(df){
+  data = df %>% 
+  rename(
+    date = date_local,
+    aluminum = aluminum_pm2_5_lc_88104, 
+    arsenic = arsenic_pm2_5_lc_88103,
+    barium = barium_pm2_5_lc_88107,
+    bromine = bromine_pm2_5_lc_88109,
+    cadmium = cadmium_pm2_5_lc_88110,
+    calcium = calcium_pm2_5_lc_88111,
+    chromium = chromium_pm2_5_lc_88112,
+    copper = copper_pm2_5_lc_88114,
+    iron = iron_pm2_5_lc_88126,
+    lead = lead_pm2_5_lc_88128,
+    magnesium = magnesium_pm2_5_lc_88140,
+    manganese = manganese_pm2_5_lc_88132,
+    nickel = nickel_pm2_5_lc_88136,
+    selenium = selenium_pm2_5_lc_88154,
+    silicon = silicon_pm2_5_lc_88165,
+    sulfate = sulfate_pm2_5_lc_88403,
+    sulfur = sulfur_pm2_5_lc_88169,
+    titanium = titanium_pm2_5_lc_88161,
+    nitrates = total_nitrate_pm2_5_lc_88306,
+    vanadium = vanadium_pm2_5_lc_88164,
+    zinc = zinc_pm2_5_lc_88167
+    )
+}
+
+pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>% 
+  rename(
+    date = date_local,
+    pm25 = pm2.5_total
+  ) %>% 
+  select(date, pm25)
+
+conc <- read_csv("./data/pm2.5_components_daily_nyc_any3_averg.csv") %>% 
+  rename_pollutants() %>% 
+  select(-X1) %>% 
+  left_join(pm25_tot, by = "date") %>% 
+  relocate(date, pm25)
 
 # multiply all concentrations by 1000 for units
-i <- c(2:22)
+i <- c(2:23)
 conc[ , i] <- apply(conc[ , i], 2,
                     function(x)
                       x*1000)
@@ -74,7 +111,7 @@ Scaled factor analysis - must provide number of factors here
 # remove potassium so that 4th of July fireworks do not alter overall results
 zspec_pm25 <- 
   conc %>% 
-  select(-date, -pm25, -K) %>% 
+  select(-date, -pm25) %>% 
   scale(center = TRUE, scale = TRUE)
 
 # factor analysis - must provide number of factors!
@@ -271,3 +308,8 @@ pm25 <- source_conc %>%
               values_from = srce)
 
 ```
+
+### Next steps:
+- APCA, PCP, PCP + APCA?
+- when running APCA for NYC, extract loadings and for each source contribution look at seasonal patterns (break calendar into 4 seasons of 3 months each), look at concentrations/contributions by season (traffic higher in winter, regional in winter), day of week (traffic higher on weekdays)
+- scores: correlations between sources and PM2.5 + patterns

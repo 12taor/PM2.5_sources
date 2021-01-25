@@ -332,15 +332,3 @@ pm25 <- source_conc %>%
               names_prefix = "source_",
               values_from = srce)
 ```
-
-### Next steps (likely to copy into new doc):
-
-  - Do general time series of PM2.5 and MI
-  - Total PM2.5 and MI
-  - APCA, PCP, PCP + APCA?
-  - when running APCA for NYC, extract loadings and for each source
-    contribution look at seasonal patterns (break calendar into 4
-    seasons of 3 months each), look at concentrations/contributions by
-    season (traffic higher in winter, regional in winter), day of week
-    (traffic higher on weekdays)
-  - scores: correlations between sources and PM2.5 + patterns
