@@ -108,10 +108,9 @@ Scaled factor analysis - must provide number of factors here
 
 ```{r}
 # set mean = 0, SD = 1
-# remove potassium so that 4th of July fireworks do not alter overall results
 zspec_pm25 <- 
   conc %>% 
-  select(-date, -pm25) %>% 
+  select(-date, -pm25, -sulfur) %>% 
   scale(center = TRUE, scale = TRUE)
 
 # factor analysis - must provide number of factors!
@@ -216,7 +215,7 @@ x <- a %>%
   select(contains("factor")) %>% as.matrix()
 
 # dependent variable for regression will be actual element concentration. define this as y.
-y <- conc %>% select(-date)
+y <- conc %>% select(-date, -sulfur)
 
 # repeat 'regress' for each element using 'x' as factors and 'y' as concentrations)
 regress <- map(y, regress) %>% 
@@ -281,15 +280,9 @@ mean_source <- source_conc %>%
 
 ```
 
-### Final datasets:
- 1) original loadings from factor analysis
- 2) mean source contributions for each element, mean predicted concentration, percent error
- 3) source contributions to total pm2.5
+### Source contributions to each component of PM2.5
 
 ```{r}
-# results of factor analysis, including loadings 
-factors
-
 # calculate mean predicted concentration and percent error
 SA_Varimax <- mean_source %>% 
   ungroup(element) %>% 
@@ -299,6 +292,47 @@ SA_Varimax <- mean_source %>%
     Pct_error = (PredConc - MeanConc)/MeanConc
   )
 
+# calculate proportion of each element coming from each source 
+# (negative values from SA_Varimax converted to 0%)
+SA_proportion_long <- source_conc %>% 
+  group_by(element, srce_num) %>% 
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  mutate(
+    source_mean = if_else(source_mean < 0, 0, source_mean)) %>% 
+  ungroup() %>% 
+  group_by(element) %>% 
+  mutate(
+    total = sum(source_mean),
+    source_percent = round((source_mean/total)*100, digits = 2))
+
+# make the table nicer to look at
+SA_proportion <- SA_proportion_long %>% 
+  relocate(element, srce_num, source_percent) %>% 
+  pivot_wider(element: source_percent,
+              names_from = srce_num,
+              names_prefix = "source_",
+              values_from = source_percent) %>% 
+  kable()
+
+SA_proportion
+
+# bar graph showing proportion of each element coming from each source
+SA_bar <- SA_proportion_long %>% 
+  ungroup() %>% 
+  mutate(element = fct_reorder(element, source_percent)) %>% 
+  ggplot(aes(x = element, y = source_mean, fill = srce_num)) +
+  geom_col(position = "fill") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ylab("") +
+  xlab("")
+
+SA_bar
+
+```
+
+
+```{r}
 # source contributions to total pm2.5
 pm25 <- source_conc %>% 
   filter(element == 'pm25') %>% 
@@ -306,8 +340,8 @@ pm25 <- source_conc %>%
   pivot_wider(names_from = srce_num,
               names_prefix = "source_",
               values_from = srce)
-
 ```
+
 
 ### Next steps:
 - APCA, PCP, PCP + APCA?

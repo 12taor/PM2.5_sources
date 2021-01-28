@@ -27,6 +27,7 @@ scale_fill_discrete = scale_fill_viridis_d
 Load in data
 
 ```{r echo=FALSE}
+# dataset should include date, total pm2.5, and pm2.5 components
 
 conc <- read_csv("./data/concentrations9910.csv") %>% 
   mutate(
