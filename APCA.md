@@ -5,13 +5,19 @@ Rachel Tao
 
 Load in data
 
-    ## 
-    ## ── Column specification ────────────────────────────────────────────────────────
-    ## cols(
-    ##   .default = col_double(),
-    ##   date = col_character()
-    ## )
-    ## ℹ Use `spec()` for the full column specifications.
+``` r
+# dataset should include date, total pm2.5, and pm2.5 components
+
+conc <- read_csv("./data/concentrations9910.csv") %>% 
+  mutate(
+    date = as.Date(date, "%m/%d/%Y"))
+
+# multiply all concentrations by 1000 for units
+i <- c(2:22)
+conc[ , i] <- apply(conc[ , i], 2,
+                    function(x)
+                      x*1000)
+```
 
 Means, correlations and variances
 
@@ -33,17 +39,11 @@ conc_summarize <-
 means <- conc_summarize %>% 
   summarize(mean = mean(concentration, na.rm = TRUE)) %>% 
   arrange(element)
-```
 
-    ## `summarise()` ungrouping output (override with `.groups` argument)
-
-``` r
 vars <- conc_summarize %>% 
   summarize(variance = var(concentration, na.rm = TRUE)) %>% 
   arrange(element)
 ```
-
-    ## `summarise()` ungrouping output (override with `.groups` argument)
 
 Scaled factor analysis - must provide number of factors here
 
@@ -63,16 +63,7 @@ factors <-
      scores = "regression",
      SMC  = TRUE,
      fm = "pa")
-```
 
-    ## Warning in fa.stats(r = r, f = f, phi = phi, n.obs = n.obs, np.obs = np.obs, :
-    ## The estimated weights for the factor scores are probably incorrect. Try a
-    ## different factor score estimation method.
-
-    ## Warning in fac(r = r, nfactors = nfactors, n.obs = n.obs, rotate = rotate, : An
-    ## ultra-Heywood case was detected. Examine the results carefully
-
-``` r
 # calculate factor scores, loadings, and weights (aka standardized scoring coefficients)
 fact <- as_tibble(factors$scores)
 loadings <- factors$loadings
@@ -104,11 +95,7 @@ min <- coeff %>%
               names_from = factor_num,
               names_prefix = "minimum_",
               values_from = sum)
-```
 
-    ## `summarise()` ungrouping output (override with `.groups` argument)
-
-``` r
 # reattach factor scores to dates and calculate absolute factor scores for each day
 # (equation 7)
 a <- conc %>% 
@@ -139,8 +126,6 @@ factor_means <- a %>%
   group_by(factor_num) %>% 
   summarize(mean_score = mean(factor_score, na.rm = TRUE))
 ```
-
-    ## `summarise()` ungrouping output (override with `.groups` argument)
 
 Regress each element on factors to see source contribution
 
@@ -178,23 +163,7 @@ regress <- map(y, regress) %>%
   unnest(c(value)) %>% 
   janitor::clean_names() %>% 
   rename_at(vars(contains("factor")), funs(str_replace(., "xfactor", "beta")))
-```
 
-    ## Warning: `funs()` is deprecated as of dplyr 0.8.0.
-    ## Please use a list of either functions or lambdas: 
-    ## 
-    ##   # Simple named list: 
-    ##   list(mean = mean, median = median)
-    ## 
-    ##   # Auto named with `tibble::lst()`: 
-    ##   tibble::lst(mean, median)
-    ## 
-    ##   # Using lambdas
-    ##   list(~ mean(., trim = .2), ~ median(., na.rm = TRUE))
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_warnings()` to see where this warning was generated.
-
-``` r
 # dataset storing r-squred values
 r <- regress %>% 
   select(element, r_squared)
@@ -239,7 +208,7 @@ conc_long <- conc %>%
 
 source_conc <- left_join(sources, conc_long, by = c('element', 'date'))
 
-# calculate mean source contributions for each element (is this equivalent to laodings?)
+# calculate mean source contributions for each element
 mean_source <- source_conc %>% 
   group_by(element, srce_num) %>% 
   summarize(source_mean = mean(srce, na.rm = TRUE),
@@ -249,70 +218,7 @@ mean_source <- source_conc %>%
               values_from = "source_mean")
 ```
 
-    ## `summarise()` regrouping output by 'element' (override with `.groups` argument)
-
-### Final datasets:
-
-1)  original loadings from factor analysis
-2)  mean source contributions for each element, mean predicted
-    concentration, percent error
-3)  source contributions to total pm2.5
-
-<!-- end list -->
-
-``` r
-# results of factor analysis, including loadings 
-factors
-```
-
-    ## Factor Analysis using method =  pa
-    ## Call: fa(r = zspec_pm25, nfactors = 6, rotate = "varimax", scores = "regression", 
-    ##     SMC = TRUE, max.iter = 500, fm = "pa")
-    ## Standardized loadings (pattern matrix) based upon correlation matrix
-    ##      PA1   PA2   PA4   PA6   PA5   PA3    h2     u2 com
-    ## bc  0.11  0.29  0.51  0.27  0.14 -0.02 0.450  0.550 2.6
-    ## Na  0.21  0.12  0.46 -0.05 -0.02  0.76 0.848  0.152 1.9
-    ## Al  0.93  0.01  0.19  0.06  0.21  0.04 0.945  0.055 1.2
-    ## Si  0.94  0.02 -0.01  0.18  0.08 -0.01 0.923  0.077 1.1
-    ## S   0.25  0.11  0.84 -0.02  0.05  0.07 0.792  0.208 1.2
-    ## Cl -0.03 -0.03 -0.15  0.03  0.05  0.74 0.582  0.418 1.1
-    ## Ca  0.61  0.20  0.08  0.40  0.12  0.17 0.624  0.376 2.3
-    ## Ti  0.56  0.04  0.10  0.18  0.54  0.01 0.647  0.353 2.3
-    ## V   0.08  0.88  0.19  0.11  0.10  0.03 0.838  0.162 1.2
-    ## Cr  0.07  0.02  0.08  0.16  0.18 -0.03 0.071  0.929 2.8
-    ## Mn  0.08  0.09  0.03  0.50  0.03  0.02 0.268  0.732 1.1
-    ## Fe  0.49  0.19  0.20  0.83  0.19 -0.02 1.035 -0.035 2.0
-    ## Ni  0.02  0.89  0.07  0.14  0.06  0.03 0.816  0.184 1.1
-    ## Cu  0.04  0.08  0.11  0.09  0.64  0.03 0.435  0.565 1.2
-    ## Zn  0.02  0.33  0.22  0.32  0.20 -0.02 0.294  0.706 3.5
-    ## Se -0.02  0.00  0.15  0.02  0.04 -0.02 0.024  0.976 1.3
-    ## Br  0.06  0.16  0.30  0.12  0.17  0.12 0.174  0.826 3.1
-    ## Ba  0.09  0.02  0.05 -0.01  0.44  0.02 0.207  0.793 1.1
-    ## Pb  0.11  0.21  0.23  0.13  0.31  0.01 0.221  0.779 3.4
-    ## 
-    ##                        PA1  PA2  PA4  PA6  PA5  PA3
-    ## SS loadings           2.83 1.94 1.57 1.44 1.24 1.18
-    ## Proportion Var        0.15 0.10 0.08 0.08 0.07 0.06
-    ## Cumulative Var        0.15 0.25 0.33 0.41 0.47 0.54
-    ## Proportion Explained  0.28 0.19 0.15 0.14 0.12 0.12
-    ## Cumulative Proportion 0.28 0.47 0.62 0.76 0.88 1.00
-    ## 
-    ## Mean item complexity =  1.9
-    ## Test of the hypothesis that 6 factors are sufficient.
-    ## 
-    ## The degrees of freedom for the null model are  171  and the objective function was  8.82 with Chi Square of  38597.72
-    ## The degrees of freedom for the model are 72  and the objective function was  0.42 
-    ## 
-    ## The root mean square of the residuals (RMSR) is  0.02 
-    ## The df corrected root mean square of the residuals is  0.03 
-    ## 
-    ## The harmonic number of observations is  3886 with the empirical chi square  585.45  with prob <  1.7e-81 
-    ## The total number of observations was  4383  with Likelihood Chi Square =  1847.57  with prob <  0 
-    ## 
-    ## Tucker Lewis Index of factoring reliability =  0.89
-    ## RMSEA index =  0.075  and the 90 % confidence intervals are  0.072 0.078
-    ## BIC =  1243.81
-    ## Fit based upon off diagonal values = 0.99
+### Final datasets and visualizations:
 
 ``` r
 # calculate mean predicted concentration and percent error
@@ -321,9 +227,109 @@ SA_Varimax <- mean_source %>%
   left_join(r, by = "element") %>% 
   mutate(
     PredConc = reduce(select(., contains("source")), `+`),
-    Pct_error = (PredConc - MeanConc)/MeanConc
+    Pct_error = round(((PredConc - MeanConc)/MeanConc)*100, digits = 2)
   )
 
+i <- c(2:11)
+SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
+                    function(x)
+                      round(x, digits = 3))
+
+SA_Varimax %>% kable()
+```
+
+| element | MeanConc | source\_1 | source\_2 | source\_3 | source\_4 | source\_5 | source\_6 | r\_squared |  PredConc | Pct\_error |
+| :------ | -------: | --------: | --------: | --------: | --------: | --------: | --------: | ---------: | --------: | ---------: |
+| Al      |   49.426 |    32.577 |     0.078 |     0.761 |     8.202 |     7.408 |     1.615 |      0.977 |    50.641 |       2.46 |
+| Ba      |    8.662 |     0.411 |     0.018 |     0.229 |     0.422 |     5.437 |   \-0.153 |      0.308 |     6.365 |    \-26.52 |
+| bc      |  714.555 |    37.980 |    72.891 |  \-18.438 |   278.533 |    59.691 |   101.568 |      0.494 |   532.225 |    \-25.52 |
+| Br      |    0.861 |     0.048 |     0.118 |     0.114 |     0.505 |     0.276 |     0.134 |      0.196 |     1.196 |      38.89 |
+| Ca      |   30.204 |    10.095 |     2.221 |     2.602 |     0.878 |     1.772 |     6.478 |      0.635 |    24.045 |    \-20.39 |
+| Cl      |   14.889 |   \-2.861 |   \-1.400 |    49.535 |  \-21.593 |     6.858 |     3.967 |      0.743 |    34.505 |     131.75 |
+| Cr      |    0.452 |     0.026 |     0.005 |   \-0.012 |     0.043 |     0.110 |     0.068 |      0.083 |     0.240 |    \-46.93 |
+| Cu      |    3.315 |   \-0.053 |     0.116 |     0.099 |     0.317 |     2.601 |     0.215 |      0.646 |     3.295 |     \-0.59 |
+| Fe      |   62.962 |    17.038 |     4.282 |   \-0.706 |     8.370 |     6.798 |    28.720 |      0.989 |    64.502 |       2.45 |
+| K       |   37.033 |     8.214 |     2.333 |     1.671 |     8.674 |     6.302 |     3.479 |      0.446 |    30.671 |    \-17.18 |
+| Mn      |    0.612 |     0.160 |     0.119 |     0.060 |     0.031 |     0.057 |     1.028 |      0.251 |     1.456 |     138.03 |
+| Na      |  194.429 |    26.018 |     9.376 |    86.193 |    76.425 |   \-6.090 |   \-5.149 |      0.962 |   186.774 |     \-3.94 |
+| Ni      |    2.866 |     0.086 |     1.978 |     0.064 |     0.181 |     0.134 |     0.451 |      0.904 |     2.895 |       1.00 |
+| Pb      |    5.615 |     0.292 |     0.455 |     0.007 |     1.048 |     1.486 |     0.405 |      0.266 |     3.692 |    \-34.24 |
+| pm25    | 9745.883 |  1436.903 |   771.344 |     6.481 |  6416.667 |   839.834 |   654.794 |      0.827 | 10126.024 |       3.90 |
+| S       |  997.362 |   182.865 |    40.480 |     3.498 |   946.017 |     4.672 |  \-33.322 |      0.941 |  1144.210 |      14.72 |
+| Se      |    0.152 |   \-0.015 |   \-0.001 |   \-0.014 |     0.114 |     0.028 |     0.008 |      0.031 |     0.121 |    \-20.68 |
+| Si      |   72.176 |    59.499 |     1.193 |   \-0.618 |   \-2.868 |     1.347 |    11.075 |      0.963 |    69.629 |     \-3.53 |
+| Ti      |    3.451 |     1.450 |     0.045 |     0.030 |     0.248 |     2.012 |     0.456 |      0.756 |     4.241 |      22.88 |
+| V       |    3.356 |     0.269 |     1.966 |     0.048 |     0.717 |     0.308 |     0.354 |      0.922 |     3.663 |       9.14 |
+| Zn      |   11.338 |     0.045 |     2.334 |   \-0.300 |     3.168 |     2.832 |     3.386 |      0.311 |    11.464 |       1.11 |
+
+``` r
+# calculate proportion of each element coming from each source 
+# (negative values from SA_Varimax converted to 0%)
+SA_proportion_long <- source_conc %>% 
+  group_by(element, srce_num) %>% 
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  mutate(
+    source_mean = if_else(source_mean < 0, 0, source_mean)) %>% 
+  ungroup() %>% 
+  group_by(element) %>% 
+  mutate(
+    total = sum(source_mean),
+    source_percent = round((source_mean/total)*100, digits = 2))
+
+# make the table nicer to look at
+SA_proportion <- SA_proportion_long %>% 
+  relocate(element, srce_num, source_percent) %>% 
+  pivot_wider(element: source_percent,
+              names_from = srce_num,
+              names_prefix = "source_",
+              values_from = source_percent) %>% 
+  kable()
+
+SA_proportion
+```
+
+| element | source\_1 | source\_2 | source\_3 | source\_4 | source\_5 | source\_6 |
+| :------ | --------: | --------: | --------: | --------: | --------: | --------: |
+| Al      |     64.33 |      0.15 |      1.50 |     16.20 |     14.63 |      3.19 |
+| Ba      |      6.31 |      0.28 |      3.51 |      6.48 |     83.42 |      0.00 |
+| bc      |      6.90 |     13.24 |      0.00 |     50.58 |     10.84 |     18.44 |
+| Br      |      4.04 |      9.90 |      9.55 |     42.19 |     23.08 |     11.24 |
+| Ca      |     41.98 |      9.24 |     10.82 |      3.65 |      7.37 |     26.94 |
+| Cl      |      0.00 |      0.00 |     82.07 |      0.00 |     11.36 |      6.57 |
+| Cr      |     10.33 |      1.80 |      0.00 |     17.20 |     43.51 |     27.16 |
+| Cu      |      0.00 |      3.47 |      2.97 |      9.47 |     77.68 |      6.41 |
+| Fe      |     26.13 |      6.57 |      0.00 |     12.84 |     10.43 |     44.04 |
+| K       |     26.78 |      7.61 |      5.45 |     28.28 |     20.55 |     11.34 |
+| Mn      |     11.01 |      8.15 |      4.12 |      2.16 |      3.91 |     70.65 |
+| Na      |     13.14 |      4.74 |     43.53 |     38.60 |      0.00 |      0.00 |
+| Ni      |      2.99 |     68.32 |      2.22 |      6.26 |      4.63 |     15.58 |
+| Pb      |      7.91 |     12.31 |      0.19 |     28.38 |     40.24 |     10.97 |
+| pm25    |     14.19 |      7.62 |      0.06 |     63.37 |      8.29 |      6.47 |
+| S       |     15.53 |      3.44 |      0.30 |     80.34 |      0.40 |      0.00 |
+| Se      |      0.00 |      0.00 |      0.00 |     75.70 |     18.78 |      5.52 |
+| Si      |     81.38 |      1.63 |      0.00 |      0.00 |      1.84 |     15.15 |
+| Ti      |     34.19 |      1.06 |      0.72 |      5.84 |     47.45 |     10.74 |
+| V       |      7.34 |     53.69 |      1.32 |     19.58 |      8.41 |      9.67 |
+| Zn      |      0.38 |     19.84 |      0.00 |     26.93 |     24.07 |     28.78 |
+
+``` r
+# bar graph showing proportion of each element coming from each source
+SA_bar <- SA_proportion_long %>% 
+  ungroup() %>% 
+  mutate(element = fct_reorder(element, source_percent)) %>% 
+  ggplot(aes(x = element, y = source_mean, fill = srce_num)) +
+  geom_col(position = "fill") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ylab("") +
+  xlab("")
+
+SA_bar
+```
+
+<img src="APCA_files/figure-gfm/unnamed-chunk-8-1.png" width="90%" />
+
+``` r
 # source contributions to total pm2.5
 pm25 <- source_conc %>% 
   filter(element == 'pm25') %>% 
