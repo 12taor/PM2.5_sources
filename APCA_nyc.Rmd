@@ -136,7 +136,7 @@ zspec_pm25 <-
 # factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
-     nfactors = 6, max.iter = 500,
+     nfactors = 5, max.iter = 500,
      rotate = "varimax",
      scores = "regression",
      SMC  = TRUE,
@@ -314,7 +314,7 @@ SA_Varimax <- mean_source %>%
     Pct_error = round(((PredConc - MeanConc)/MeanConc)*100, digits = 2)
   )
 
-i <- c(2:11)
+i <- c(2:10)
 SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
                     function(x)
                       round(x, digits = 3))
