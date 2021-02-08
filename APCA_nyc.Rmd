@@ -1,8 +1,8 @@
 ---
-title: "APCA NYC"
+title: "APCA 6 - remove 7/2 - 7/6"
 author: "Rachel Tao"
 date: "1/23/2021"
-output: pdf_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -66,7 +66,7 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   ) %>% 
   select(date, pm25)
 
-fireworks <- as_date(c(ymd("2001-07-02"):ymd("2001-07-06"), 
+fireworks <- as_date(c(ymd("2001-07-02"):ymd("2001-07-06"),
                      ymd("2002-07-02"):ymd("2002-07-06"),
                      ymd("2003-07-02"):ymd("2003-07-06"),
                      ymd("2004-07-02"):ymd("2004-07-06"),
@@ -86,8 +86,8 @@ conc <- read_csv("./data/NYC_pm2.5_components_daily.csv") %>%
   rename_pollutants() %>% 
   select(-X1, -sulfur) %>% 
   left_join(pm25_tot, by = "date") %>% 
-  relocate(date, pm25) %>% 
-  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
+  relocate(date, pm25) # %>% 
+#  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
 
 # multiply all concentrations by 1000 for units
 i <- c(2:23)
@@ -96,6 +96,35 @@ conc[ , i] <- apply(conc[ , i], 2,
                       x*1000)
 
 ```
+
+
+```{r eval=FALSE, include=FALSE}
+K_year <- conc %>% 
+  mutate(year = format(date, "%Y"),
+         CommonDate = as.Date(paste0("2004-", format(date, "%j")), "%Y-%j")) %>%
+  ggplot(aes(x = CommonDate, y = potassium)) +
+  geom_line() +
+  facet_grid(facets = year ~., margins = FALSE) +
+  scale_x_date(
+    labels = function(x) format(x, "%d-%b"),
+    breaks = "month") +
+  xlab("") +
+  ggtitle("Potassium concentrations by year")
+
+K_year
+
+conc %>% 
+  select(date, potassium) %>% 
+  filter(potassium > 200) %>% 
+  kable(caption = "dates  where Potassium > 200")
+
+conc %>% 
+  select(date, potassium) %>% 
+  filter(potassium > 150) %>% 
+  kable(caption = "dates  where Potassium > 150")
+
+```
+
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Means, correlations and variances
@@ -136,7 +165,7 @@ zspec_pm25 <-
 # factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
-     nfactors = 5, max.iter = 500,
+     nfactors = 6, max.iter = 500,
      rotate = "varimax",
      scores = "regression",
      SMC  = TRUE,
@@ -300,8 +329,7 @@ mean_source <- source_conc %>%
 
 ```
 
-### Source contributions to each component of PM2.5
-
+## Loadings
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Source contributions to each component of PM2.5
 
@@ -310,14 +338,14 @@ SA_Varimax <- mean_source %>%
   ungroup(element) %>% 
   left_join(r, by = "element") %>% 
   mutate(
-    PredConc = reduce(select(., contains("source")), `+`),
+    PredConc = round(reduce(select(., contains("source")), `+`), digits = 2),
     Pct_error = round(((PredConc - MeanConc)/MeanConc)*100, digits = 2)
   )
 
-i <- c(2:10)
+i <- c(2:11)
 SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
                     function(x)
-                      round(x, digits = 3))
+                      round(x, digits = 2))
 
 SA_Varimax %>% kable()
 
@@ -337,9 +365,8 @@ SA_proportion_long <- source_conc %>%
 
 ```
 
-### Proportion of each element coming from each source
-
-```{r}
+## Source proportions
+```{r echo=FALSE}
 # make the table nicer to look at
 SA_proportion <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
@@ -353,9 +380,8 @@ SA_proportion
 
 ```
 
-### Bar graph of above proportions
-
-```{r}
+## Bar graph of the above proportions
+```{r echo=FALSE}
 # bar graph showing proportion of each element coming from each source
 SA_bar <- SA_proportion_long %>% 
   ungroup() %>% 
@@ -376,4 +402,7 @@ pm25 <- source_conc %>%
   pivot_wider(names_from = srce_num,
               names_prefix = "source_",
               values_from = srce)
+
+# write_csv(pm25, "./experimental_results/apca_scores.csv")
+
 ```
