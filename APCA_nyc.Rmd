@@ -1,8 +1,9 @@
 ---
-title: "APCA 6 - remove 7/2 - 7/6"
+title: "APCA 9 - remove 7/2 - 7/6"
 author: "Rachel Tao"
 date: "1/23/2021"
-output: github_document
+output: pdf_document
+classoption: landscape
 ---
 
 ```{r setup, include=FALSE}
@@ -40,7 +41,7 @@ rename_pollutants = function(df){
     bromine = bromine_pm2_5_lc_88109,
     cadmium = cadmium_pm2_5_lc_88110,
     calcium = calcium_pm2_5_lc_88111,
-    chromium = chromium_pm2_5_lc_88112, #check if this should be chlorine
+    chromium = chromium_pm2_5_lc_88112,
     copper = copper_pm2_5_lc_88114,
     iron = iron_pm2_5_lc_88126,
     lead = lead_pm2_5_lc_88128,
@@ -66,39 +67,18 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   ) %>% 
   select(date, pm25)
 
-fireworks <- as_date(c(ymd("2001-07-02"):ymd("2001-07-06"),
-                     ymd("2002-07-02"):ymd("2002-07-06"),
-                     ymd("2003-07-02"):ymd("2003-07-06"),
-                     ymd("2004-07-02"):ymd("2004-07-06"),
-                     ymd("2005-07-02"):ymd("2005-07-06"),
-                     ymd("2006-07-02"):ymd("2006-07-06"),
-                     ymd("2007-07-02"):ymd("2007-07-06"),
-                     ymd("2008-07-02"):ymd("2008-07-06"),
-                     ymd("2009-07-02"):ymd("2009-07-06"),
-                     ymd("2010-07-02"):ymd("2010-07-06"),
-                     ymd("2011-07-02"):ymd("2011-07-06"),
-                     ymd("2012-07-02"):ymd("2012-07-06"),
-                     ymd("2013-07-02"):ymd("2013-07-06"),
-                     ymd("2014-07-02"):ymd("2014-07-06"),
-                     ymd("2015-07-02"):ymd("2015-07-06")))
-
 conc <- read_csv("./data/NYC_pm2.5_components_daily.csv") %>% 
   rename_pollutants() %>% 
   select(-X1, -sulfur) %>% 
   left_join(pm25_tot, by = "date") %>% 
-  relocate(date, pm25) # %>% 
-#  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
-
-# multiply all concentrations by 1000 for units
-i <- c(2:23)
-conc[ , i] <- apply(conc[ , i], 2,
-                    function(x)
-                      x*1000)
+  relocate(date, pm25)
 
 ```
 
 
 ```{r eval=FALSE, include=FALSE}
+# which days have unusually high levels of potassium?
+
 K_year <- conc %>% 
   mutate(year = format(date, "%Y"),
          CommonDate = as.Date(paste0("2004-", format(date, "%j")), "%Y-%j")) %>%
@@ -122,6 +102,40 @@ conc %>%
   select(date, potassium) %>% 
   filter(potassium > 150) %>% 
   kable(caption = "dates  where Potassium > 150")
+
+# we will exclude the days surrounding 4th of july, which consistently have
+# unusually high potassium levels due to fireworks.
+
+```
+
+
+```{r}
+# finish cleaning data using information about fireworks
+
+fireworks <- as_date(c(ymd("2001-07-02"):ymd("2001-07-06"),
+                     ymd("2002-07-02"):ymd("2002-07-06"),
+                     ymd("2003-07-02"):ymd("2003-07-06"),
+                     ymd("2004-07-02"):ymd("2004-07-06"),
+                     ymd("2005-07-02"):ymd("2005-07-06"),
+                     ymd("2006-07-02"):ymd("2006-07-06"),
+                     ymd("2007-07-02"):ymd("2007-07-06"),
+                     ymd("2008-07-02"):ymd("2008-07-06"),
+                     ymd("2009-07-02"):ymd("2009-07-06"),
+                     ymd("2010-07-02"):ymd("2010-07-06"),
+                     ymd("2011-07-02"):ymd("2011-07-06"),
+                     ymd("2012-07-02"):ymd("2012-07-06"),
+                     ymd("2013-07-02"):ymd("2013-07-06"),
+                     ymd("2014-07-02"):ymd("2014-07-06"),
+                     ymd("2015-07-02"):ymd("2015-07-06")))
+
+conc <- conc %>% 
+  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
+
+# multiply all concentrations by 1000 for units
+i <- c(2:23)
+conc[ , i] <- apply(conc[ , i], 2,
+                    function(x)
+                      x*1000)
 
 ```
 
@@ -165,7 +179,7 @@ zspec_pm25 <-
 # factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
-     nfactors = 6, max.iter = 500,
+     nfactors = 9, max.iter = 500,
      rotate = "varimax",
      scores = "regression",
      SMC  = TRUE,
@@ -273,7 +287,7 @@ regress <- map(y, regress) %>%
   janitor::clean_names() %>% 
   rename_at(vars(contains("factor")), funs(str_replace(., "xfactor", "beta")))
 
-# dataset storing r-squred values
+# dataset storing r-squared values
 r <- regress %>% 
   select(element, r_squared)
 
@@ -290,7 +304,7 @@ betas <- regress %>%
 # combine betas with factor scores in a list 
 sources = lapply(betas$betas, cbind, a)
 
-# in the above step, element names are automatically removed. rename list elements
+# in the above step, element names are automatically removed. rename list elements:
 names(sources) <- betas$element
 
 # calculate source contributions by multiplying absolute factor scores by beta values
@@ -342,7 +356,7 @@ SA_Varimax <- mean_source %>%
     Pct_error = round(((PredConc - MeanConc)/MeanConc)*100, digits = 2)
   )
 
-i <- c(2:11)
+i <- c(2:14)
 SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
                     function(x)
                       round(x, digits = 2))
@@ -402,6 +416,8 @@ pm25 <- source_conc %>%
   pivot_wider(names_from = srce_num,
               names_prefix = "source_",
               values_from = srce)
+
+
 
 # write_csv(pm25, "./experimental_results/apca_scores.csv")
 
