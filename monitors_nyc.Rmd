@@ -1,7 +1,7 @@
 ---
 title: "Explore AQS monitor datasets"
 author: Rachel Tao
-output: github_document
+output: pdf_document
 ---
 
 ```{r setup, include = FALSE}
@@ -241,6 +241,12 @@ map
 
 ```
 
+We are looking at 3 different datasets:
+
+1) Queens monitor (also called monitor 124): This dataset includes a single monitor, the one at Queens College (see map above).
+2) All monitors: This dataset only includes days where all monitors are available, and takes the average of all 3
+3) Any monitor: This dataset takes the average of all monitors available on that day, no matter how many are available. This means that some days the value is an average of all 3 monitors, and some days it is the raw value for a single monitor.
+
 ### Data availability over time at each monitor
 
 ```{r echo=FALSE, warning=FALSE}
@@ -423,5 +429,5 @@ loadings_all
 loadings_124
 ```
 
-Most chemicals load on the first component for all 3 monitors. 
+Most chemicals load on the first component for all 3 datasets. 
 
