@@ -7,7 +7,7 @@ classoption: landscape
 ---
 
 ```{r setup, include=FALSE}
-pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, gplots, GGally, knitr, patchwork, psych, factoextra)
+pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, gplots, GGally, knitr, patchwork, psych, factoextra, RColorBrewer)
 
 knitr::opts_chunk$set(
 	echo = FALSE,
@@ -22,43 +22,14 @@ options(
   ggplot2.continuous.colour = "viridis",
   ggplot2.continuous.fill = "viridis")
 
-scale_colour_discrete = scale_colour_viridis_d
-scale_fill_discrete = scale_fill_viridis_d
+scale_colour_discrete = scale_colour_brewer(palette = "Spectral")
+scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # Load in data
-
-rename_pollutants = function(df){
-  data = df %>% 
-  rename(
-    date = date_local,
-    aluminum = aluminum_pm2_5_lc_88104, 
-    arsenic = arsenic_pm2_5_lc_88103,
-    barium = barium_pm2_5_lc_88107,
-    bromine = bromine_pm2_5_lc_88109,
-    cadmium = cadmium_pm2_5_lc_88110,
-    calcium = calcium_pm2_5_lc_88111,
-    chromium = chromium_pm2_5_lc_88112,
-    copper = copper_pm2_5_lc_88114,
-    iron = iron_pm2_5_lc_88126,
-    lead = lead_pm2_5_lc_88128,
-    magnesium = magnesium_pm2_5_lc_88140,
-    manganese = manganese_pm2_5_lc_88132,
-    potassium = potassium_pm2_5_lc_88180,
-    nickel = nickel_pm2_5_lc_88136,
-    selenium = selenium_pm2_5_lc_88154,
-    silicon = silicon_pm2_5_lc_88165,
-    sulfate = sulfate_pm2_5_lc_88403,
-    sulfur = sulfur_pm2_5_lc_88169,
-    titanium = titanium_pm2_5_lc_88161,
-    nitrates = total_nitrate_pm2_5_lc_88306,
-    vanadium = vanadium_pm2_5_lc_88164,
-    zinc = zinc_pm2_5_lc_88167
-    )
-}
 
 pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>% 
   rename(
@@ -67,11 +38,13 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   ) %>% 
   select(date, pm25)
 
-conc <- read_csv("./data/NYC_pm2.5_components_daily.csv") %>% 
-  rename_pollutants() %>% 
-  select(-X1, -sulfur) %>% 
+conc <- read_csv("./data/nyc_daily_pm2.5_components.csv") %>% 
+  janitor::clean_names() %>% 
+  select(-antimony, -cobalt) %>% 
   left_join(pm25_tot, by = "date") %>% 
-  relocate(date, pm25)
+  relocate(date, pm25) %>% 
+  filter(date > "2006-12-31",
+         date < "2016-01-01")
 
 ```
 
@@ -82,7 +55,7 @@ conc <- read_csv("./data/NYC_pm2.5_components_daily.csv") %>%
 K_year <- conc %>% 
   mutate(year = format(date, "%Y"),
          CommonDate = as.Date(paste0("2004-", format(date, "%j")), "%Y-%j")) %>%
-  ggplot(aes(x = CommonDate, y = potassium)) +
+  ggplot(aes(x = CommonDate, y = potassium_ion)) +
   geom_line() +
   facet_grid(facets = year ~., margins = FALSE) +
   scale_x_date(
@@ -94,13 +67,13 @@ K_year <- conc %>%
 K_year
 
 conc %>% 
-  select(date, potassium) %>% 
-  filter(potassium > 200) %>% 
+  select(date, potassium_ion) %>% 
+  filter(potassium_ion > 0.2) %>% 
   kable(caption = "dates  where Potassium > 200")
 
 conc %>% 
-  select(date, potassium) %>% 
-  filter(potassium > 150) %>% 
+  select(date, potassium_ion) %>% 
+  filter(potassium_ion > 0.15) %>% 
   kable(caption = "dates  where Potassium > 150")
 
 # we will exclude the days surrounding 4th of july, which consistently have
@@ -112,12 +85,7 @@ conc %>%
 ```{r}
 # finish cleaning data using information about fireworks
 
-fireworks <- as_date(c(ymd("2001-07-02"):ymd("2001-07-06"),
-                     ymd("2002-07-02"):ymd("2002-07-06"),
-                     ymd("2003-07-02"):ymd("2003-07-06"),
-                     ymd("2004-07-02"):ymd("2004-07-06"),
-                     ymd("2005-07-02"):ymd("2005-07-06"),
-                     ymd("2006-07-02"):ymd("2006-07-06"),
+fireworks <- as_date(c(
                      ymd("2007-07-02"):ymd("2007-07-06"),
                      ymd("2008-07-02"):ymd("2008-07-06"),
                      ymd("2009-07-02"):ymd("2009-07-06"),
@@ -404,6 +372,7 @@ SA_bar <- SA_proportion_long %>%
   theme(axis.text.x = element_text(angle = 90)) +
   ylab("") +
   xlab("")
+  scale_fill_brewer(palette = "Spectral")
 
 SA_bar
 ```
