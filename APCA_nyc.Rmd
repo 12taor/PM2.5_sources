@@ -1,5 +1,5 @@
 ---
-title: "APCA 9 - remove 7/2 - 7/6"
+title: "APCA 6"
 author: "Rachel Tao"
 date: "1/23/2021"
 output: pdf_document
@@ -7,7 +7,7 @@ classoption: landscape
 ---
 
 ```{r setup, include=FALSE}
-pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, gplots, GGally, knitr, patchwork, psych, factoextra, RColorBrewer)
+pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, gplots, GGally, knitr, patchwork, psych, factoextra, RColorBrewer, kableExtra)
 
 knitr::opts_chunk$set(
 	echo = FALSE,
@@ -42,9 +42,21 @@ conc <- read_csv("./data/nyc_daily_pm2.5_components.csv") %>%
   janitor::clean_names() %>% 
   select(-antimony, -cobalt) %>% 
   left_join(pm25_tot, by = "date") %>% 
+  rename(ammonium = ammonium_ion,
+         EC = elemental_carbon,
+         OC = organic_carbon,
+         potassium = potassium_ion,
+         nitrate = total_nitrate) %>% 
   relocate(date, pm25) %>% 
   filter(date > "2006-12-31",
-         date < "2016-01-01")
+         date < "2016-01-01") %>% 
+  na.omit()
+
+# multiply all concentrations by 1000 to convert to ng/m3
+i <- c(2:28)
+conc[ , i] <- apply(conc[ , i], 2,
+                    function(x)
+                      x*1000)
 
 ```
 
@@ -68,13 +80,13 @@ K_year
 
 conc %>% 
   select(date, potassium_ion) %>% 
-  filter(potassium_ion > 0.2) %>% 
-  kable(caption = "dates  where Potassium > 200")
+  filter(potassium_ion > 200) %>% 
+  kable(caption = "dates  where Potassium > 200 ng/m3")
 
 conc %>% 
   select(date, potassium_ion) %>% 
-  filter(potassium_ion > 0.15) %>% 
-  kable(caption = "dates  where Potassium > 150")
+  filter(potassium_ion > 150) %>% 
+  kable(caption = "dates  where Potassium > 150 ng/m3")
 
 # we will exclude the days surrounding 4th of july, which consistently have
 # unusually high potassium levels due to fireworks.
@@ -85,25 +97,19 @@ conc %>%
 ```{r}
 # finish cleaning data using information about fireworks
 
-fireworks <- as_date(c(
-                     ymd("2007-07-02"):ymd("2007-07-06"),
-                     ymd("2008-07-02"):ymd("2008-07-06"),
-                     ymd("2009-07-02"):ymd("2009-07-06"),
-                     ymd("2010-07-02"):ymd("2010-07-06"),
-                     ymd("2011-07-02"):ymd("2011-07-06"),
-                     ymd("2012-07-02"):ymd("2012-07-06"),
-                     ymd("2013-07-02"):ymd("2013-07-06"),
-                     ymd("2014-07-02"):ymd("2014-07-06"),
-                     ymd("2015-07-02"):ymd("2015-07-06")))
-
-conc <- conc %>% 
-  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
-
-# multiply all concentrations by 1000 for units
-i <- c(2:23)
-conc[ , i] <- apply(conc[ , i], 2,
-                    function(x)
-                      x*1000)
+# fireworks <- as_date(c(
+#                      ymd("2007-07-02"):ymd("2007-07-06"),
+#                      ymd("2008-07-02"):ymd("2008-07-06"),
+#                      ymd("2009-07-02"):ymd("2009-07-06"),
+#                      ymd("2010-07-02"):ymd("2010-07-06"),
+#                      ymd("2011-07-02"):ymd("2011-07-06"),
+#                      ymd("2012-07-02"):ymd("2012-07-06"),
+#                      ymd("2013-07-02"):ymd("2013-07-06"),
+#                      ymd("2014-07-02"):ymd("2014-07-06"),
+#                      ymd("2015-07-02"):ymd("2015-07-06")))
+# 
+# conc <- conc %>%
+#   filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
 
 ```
 
@@ -147,7 +153,7 @@ zspec_pm25 <-
 # factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
-     nfactors = 9, max.iter = 500,
+     nfactors = 6, max.iter = 500,
      rotate = "varimax",
      scores = "regression",
      SMC  = TRUE,
@@ -320,16 +326,17 @@ SA_Varimax <- mean_source %>%
   ungroup(element) %>% 
   left_join(r, by = "element") %>% 
   mutate(
-    PredConc = round(reduce(select(., contains("source")), `+`), digits = 2),
-    Pct_error = round(((PredConc - MeanConc)/MeanConc)*100, digits = 2)
+    PredConc = reduce(select(., contains("source")), `+`),
+    Pct_error = ((PredConc - MeanConc)/MeanConc)*100
   )
 
-i <- c(2:14)
+i <- c(2:11)
 SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
                     function(x)
                       round(x, digits = 2))
 
-SA_Varimax %>% kable()
+SA_Varimax %>% kable(booktabs = T, align = "c") %>% 
+  kable_styling(full_width = T)
 
 # calculate proportion of each element coming from each source 
 # (negative values from SA_Varimax converted to 0%)
@@ -356,9 +363,9 @@ SA_proportion <- SA_proportion_long %>%
               names_from = srce_num,
               names_prefix = "source_",
               values_from = source_percent) %>% 
-  kable()
+  kable(booktabs = T)
 
-SA_proportion
+# SA_proportion
 
 ```
 
@@ -371,7 +378,7 @@ SA_bar <- SA_proportion_long %>%
   geom_col(position = "fill") +
   theme(axis.text.x = element_text(angle = 90)) +
   ylab("") +
-  xlab("")
+  xlab("") +
   scale_fill_brewer(palette = "Spectral")
 
 SA_bar
