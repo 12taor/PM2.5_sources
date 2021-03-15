@@ -1,0 +1,40 @@
+---
+title: "Explore APCA"
+author: "Rachel Tao"
+date: "3/14/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, ggplot2, gplots, ggfortify, ggrepel, gridExtra, GPArotation, GGally, knitr, patchwork, psych, factoextra, RColorBrewer, kableExtra, pals)
+
+knitr::opts_chunk$set(
+	echo = FALSE,
+	fig.asp = 0.6,
+	fig.width = 6,
+	warning = FALSE,
+	out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_brewer(palette = "Spectral")
+scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
+
+```
+
+APCA cores were calcualted for years 2007-2015 using a 6-factor solution
+
+```{r}
+# Load in data
+
+apca_scores <- read_csv("./data/apca_scores.csv")
+
+```
+
+
