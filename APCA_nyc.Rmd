@@ -1,5 +1,5 @@
 ---
-title: "APCA 6"
+title: "APCA 6, 7/2 - 7/6 removed"
 author: "Rachel Tao"
 date: "1/23/2021"
 output: pdf_document
@@ -7,7 +7,7 @@ classoption: landscape
 ---
 
 ```{r setup, include=FALSE}
-pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, gplots, GGally, knitr, patchwork, psych, factoextra, RColorBrewer, kableExtra)
+pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, ggplot2, gplots, ggfortify, ggrepel, gridExtra, GPArotation, GGally, knitr, patchwork, psych, factoextra, RColorBrewer, kableExtra, pals)
 
 knitr::opts_chunk$set(
 	echo = FALSE,
@@ -38,25 +38,48 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   ) %>% 
   select(date, pm25)
 
-conc <- read_csv("./data/nyc_daily_pm2.5_components.csv") %>% 
+all_elements <- read_csv("./data/nyc_daily_pm2.5_components.csv") %>% 
   janitor::clean_names() %>% 
-  select(-antimony, -cobalt) %>% 
-  left_join(pm25_tot, by = "date") %>% 
   rename(ammonium = ammonium_ion,
          EC = elemental_carbon,
          OC = organic_carbon,
          potassium = potassium_ion,
          nitrate = total_nitrate) %>% 
-  relocate(date, pm25) %>% 
   filter(date > "2006-12-31",
-         date < "2016-01-01") %>% 
-  na.omit()
+         date < "2016-01-01")
+
+conc <- all_elements %>% 
+  select(-antimony, -cobalt) %>% 
+  left_join(pm25_tot, by = "date") %>% 
+  relocate(date, pm25)
 
 # multiply all concentrations by 1000 to convert to ng/m3
 i <- c(2:28)
 conc[ , i] <- apply(conc[ , i], 2,
                     function(x)
                       x*1000)
+
+missing_element <- sapply(conc, function(x) sum(is.na(x))/nrow(conc))
+
+dates <- tibble(seq(as.Date('2007-01-01'), as.Date('2015-12-31'), by = "days")) %>% 
+  rename(date = 'seq(as.Date("2007-01-01"), as.Date("2015-12-31"), by = "days")')
+
+time <- 
+  left_join(dates, conc, by = "date")
+
+missingness <- 
+  conc %>% 
+  ggplot(aes(x = date, y = EC)) +
+  geom_point()
+
+```
+
+```{r}
+# correlation matrix
+
+ggcorr(all_elements, method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
+       label = TRUE, label_size = 1.5, label_alpha = TRUE,
+       hjust = 1, size = 3, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: NYC Air Pollution Dataset")
 
 ```
 
@@ -66,8 +89,8 @@ conc[ , i] <- apply(conc[ , i], 2,
 
 K_year <- conc %>% 
   mutate(year = format(date, "%Y"),
-         CommonDate = as.Date(paste0("2004-", format(date, "%j")), "%Y-%j")) %>%
-  ggplot(aes(x = CommonDate, y = potassium_ion)) +
+         CommonDate = as.Date(paste0("2009", format(date, "%j")), "%Y-%j")) %>%
+  ggplot(aes(x = CommonDate, y = potassium)) +
   geom_line() +
   facet_grid(facets = year ~., margins = FALSE) +
   scale_x_date(
@@ -79,13 +102,13 @@ K_year <- conc %>%
 K_year
 
 conc %>% 
-  select(date, potassium_ion) %>% 
-  filter(potassium_ion > 200) %>% 
+  select(date, potassium) %>% 
+  filter(potassium > 200) %>% 
   kable(caption = "dates  where Potassium > 200 ng/m3")
 
 conc %>% 
-  select(date, potassium_ion) %>% 
-  filter(potassium_ion > 150) %>% 
+  select(date, potassium) %>% 
+  filter(potassium > 150) %>% 
   kable(caption = "dates  where Potassium > 150 ng/m3")
 
 # we will exclude the days surrounding 4th of july, which consistently have
@@ -97,19 +120,19 @@ conc %>%
 ```{r}
 # finish cleaning data using information about fireworks
 
-# fireworks <- as_date(c(
-#                      ymd("2007-07-02"):ymd("2007-07-06"),
-#                      ymd("2008-07-02"):ymd("2008-07-06"),
-#                      ymd("2009-07-02"):ymd("2009-07-06"),
-#                      ymd("2010-07-02"):ymd("2010-07-06"),
-#                      ymd("2011-07-02"):ymd("2011-07-06"),
-#                      ymd("2012-07-02"):ymd("2012-07-06"),
-#                      ymd("2013-07-02"):ymd("2013-07-06"),
-#                      ymd("2014-07-02"):ymd("2014-07-06"),
-#                      ymd("2015-07-02"):ymd("2015-07-06")))
-# 
-# conc <- conc %>%
-#   filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
+fireworks <- as_date(c(
+                     ymd("2007-07-02"):ymd("2007-07-06"),
+                     ymd("2008-07-02"):ymd("2008-07-06"),
+                     ymd("2009-07-02"):ymd("2009-07-06"),
+                     ymd("2010-07-02"):ymd("2010-07-06"),
+                     ymd("2011-07-02"):ymd("2011-07-06"),
+                     ymd("2012-07-02"):ymd("2012-07-06"),
+                     ymd("2013-07-02"):ymd("2013-07-06"),
+                     ymd("2014-07-02"):ymd("2014-07-06"),
+                     ymd("2015-07-02"):ymd("2015-07-06")))
+
+conc <- conc %>%
+  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
 
 ```
 
@@ -338,6 +361,36 @@ SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
 SA_Varimax %>% kable(booktabs = T, align = "c") %>% 
   kable_styling(full_width = T)
 
+# calculate proportion of each element coming from each source
+
+SA_proportion_full <- source_conc %>% 
+  group_by(element, srce_num) %>% 
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(element) %>% 
+  mutate(
+    total = sum(source_mean),
+    source_percent = round((source_mean/total)*100, digits = 2)) %>% 
+  filter(element != "pm25")
+
+# choose color palette
+Color.list <- glasbey(26)
+
+# make plot
+ggplot(SA_proportion_full, aes(x = element, y = source_percent)) + 
+  geom_col(aes(color = element, fill = element)) +  # creates a column for each loading
+  geom_hline(yintercept = 0, size = 0.2) + # creates a line at 0
+  facet_wrap(. ~ srce_num) +                       # creates a distinct box for each PC 
+  theme_bw() +                             # sets theme options
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = expression("PM"[2.5]~"Constituents"),
+       y = "Loadings") + 
+  scale_color_manual(values = Color.list) +
+  scale_fill_manual(values = Color.list) 
+
+
+
 # calculate proportion of each element coming from each source 
 # (negative values from SA_Varimax converted to 0%)
 SA_proportion_long <- source_conc %>% 
@@ -357,15 +410,25 @@ SA_proportion_long <- source_conc %>%
 ## Source proportions
 ```{r echo=FALSE}
 # make the table nicer to look at
+
+source_pie <- SA_proportion_long %>% 
+  relocate(element, srce_num, source_percent) %>% 
+  filter(element == "pm25") %>% 
+  ggplot(aes(x = "", y = source_percent, fill = srce_num)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar("y", start = 0) +
+    scale_fill_brewer(palette = "Spectral") +
+    theme_void()
+
+source_pie
+
 SA_proportion <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
-  pivot_wider(element: source_percent,
+  filter(element != "pm25") %>% 
+  pivot_wider(element:source_percent,
               names_from = srce_num,
               names_prefix = "source_",
-              values_from = source_percent) %>% 
-  kable(booktabs = T)
-
-# SA_proportion
+              values_from = source_percent)
 
 ```
 
@@ -394,7 +457,67 @@ pm25 <- source_conc %>%
               values_from = srce)
 
 
-
 # write_csv(pm25, "./experimental_results/apca_scores.csv")
 
 ```
+
+This dataset includes air pollution data from 3 monitors in NYC during the years
+2007-2015, excluding the dates surrounding 4th of July (7/2-7/6) from each year.
+
+For this experiment, we have a 6-factor solution.
+
+Sources plus notes comparing with other studies:
+
+1) road dust (?)
+  - Masiol et al. Zinc "At first glance, the factor 9 could be interpreted as road dust."
+    - mostly zinc, with moderate values of nickel, calcium, copper, manganese, and potassium
+    - mainly in winter
+    - zinc is a tracer for lubricating oil combustion, brake and tire wear aalong with manganese, iron, and copper
+    - decided this was not road dust because as particle sizes became smaller correlatioonos increased even though mass-relevant contributions are mainly in the 1-10 range, and it was strongly correlated with SO2
+    - instead thought this was a combustion source such as on-road diiesel truck traffic, ship traffic, or building heating
+  - Squizzato et al. road dust: Al, Si + Mg, Ca, Fe, Ti, Mn, Cu, OC, EC, sulfate, nitrate, Na, Cl
+  - it seems like our road dust looks different from Masiol's Zinc anyway (less zinc, more range of elements) and also different from Squizzato's road dust
+2) salt
+  - Masiol et al. fresh sea salt: chlorine, sodium, nitrate, sulfate, ammonium, EC, OC, Fe
+    - no clear seasonal/weekly patterns, but may be higher in winter due to northeasters
+    - possible crustaal particles in seawater leading to Al and Si
+    - watch out for one-day high peaks due to storms
+  - Masiol et al. sodium, Br, OC, sulfate, nitrate
+    - origin from coastal areas in southeaster US
+    - less chlorine than fresh salt
+  - Squizzato et aal. aged sea salt: Na + Mg, suflate, nitrate, OC, EC, low Cl
+  - Squizzato et al. road salt: Cl + OC, EC, nitrate, sulfate, Si, Ca, Fe
+  - Squizzato et al. fresh sea salt: Cl + Na, Ca, Mg
+  - our salt is really just chlorine, sodium, and magnesium but does also include Ba, Br, Ca, Ni, nitrate, K, selenium, silicon, vanadium, zinc
+3) crustal
+ - Masiol et al. Al, Si + some K, Ca, Mn, Fe
+    - no weekly cycles, higher in spring and summer
+ - aluminum, silicon, titanium, sulfur, vanadium, caaadmium, calcium, manganese, iron
+ 4) regional/seecondary
+ - Masiol et al. secndary ammonium sulfate: ammonium, sulfate, Br, OC, V
+    - emissions of SO2 from coal-fired power plants in upper Ohio River Valley
+    - biogenic and sea salt sulfate
+    - highest in summer, minimum on Saturdays (may not be a true pattern)
+ - Masiol et al. secondary ammonium nitrate: ammonium, nitrate, Br, NO2
+    - higher concentrations in winter, no weekly patterns
+ - Squizzato et al. secondary sulfate: sulfate, ammonium, OC, EC, selenium, vanadium, arsenic, bromine
+    - decrease over the years becaause of decreased coal use. also talk about residual oil here (could be combined?)
+ - Squizzato et al. secondary nitrate: nitrate, ammonium, sulfate, OC, EC, higher in winter
+    - reductions in NYC related to less traffic (?)
+ - We also have a lot of selenium, pretty high arsenic, and potassium in here (not mentioned in Masiol et al.)
+ 5) traffic (?)
+ - Masiol et al. EC and OC from primaary engine dust, V, Mn, Fe, Cu from road traffic emissions
+    - weekly patterns decreased on weekends
+ - Squizzato et al. spark-ignition and diesel: OC, EC, Mg, Al, Si, Ca, Fe, Cu, Zn, Mn
+ - EC, OC + pretty much everything else except sulfur sodium and ammonium. a lot of the barium, not so much vanadium
+ 6) industrial (?)
+ - it doesn't look like this is in the Masiol paper
+ - Squizzato et al. industrial: Pb, Fe, Mn, Cu, Zn, As, Se
+    - Coke production: As, Zn, Se, and Pb
+    - Metal/steel: Pb, Fe, Mn, Cu, Zn
+ - lots of chromium, copper, EC, iron, manganese, nickel, nitrate, vanadium, aluminum, ammonium, OC
+
+Masiol et al. Biomass Burning: K, OC, Br, EC, Ca, higher in summer
+Squizzato et al. biomass buring: K, OC, EC, sulfate, nitrate, Na, Al, Si, Cl, Ca, Fe, Zn, Br
+Masiol et al. Residual oil/domestic heating: vanadium, nickel, calcium, manganese, EC, iron, higher in winter
+Squizzato et al. residual oil: Ni, Mn, Zn, Ca
