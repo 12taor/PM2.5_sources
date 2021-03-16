@@ -2,13 +2,13 @@
 title: "Explore APCA"
 author: "Rachel Tao"
 date: "3/14/2021"
-output: pdf_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, ggplot2, gplots, ggfortify, ggrepel, gridExtra, GPArotation, GGally, knitr, patchwork, psych, factoextra, RColorBrewer, kableExtra, pals)
+pacman::p_load(tidyverse, lubridate, ggmap, ggcorrplot, ggplot2, gplots, ggfortify, ggrepel, gridExtra, GPArotation, GGally, knitr, patchwork, psych, factoextra, RColorBrewer, kableExtra, pals, splines)
 
 knitr::opts_chunk$set(
 	echo = FALSE,
@@ -33,8 +33,93 @@ APCA cores were calcualted for years 2007-2015 using a 6-factor solution
 ```{r}
 # Load in data
 
-apca_scores <- read_csv("./data/apca_scores.csv")
+apca_scores_07 <- read_csv("./data/apca_scores_07.csv")
+
+```
+
+## general info
+
+```{r}
+summary(apca_scores_07)
+
+# what do I do about negative scores? keep them
+# why are there 112 missings?
+```
+
+## time trends including 2007
+
+```{r}
+yr_num <- length(unique(year(apca_scores_07$date)))
+
+ggplot(apca_scores_07, aes(x = date, y = concentration)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+# road dust?
+ggplot(apca_scores_07, aes(x = date, y = source_1)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+# salt
+ggplot(apca_scores_07, aes(x = date, y = source_2)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+# crustal dust
+ggplot(apca_scores_07, aes(x = date, y = source_3)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+# regional/secondary
+ggplot(apca_scores_07, aes(x = date, y = source_4)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+# traffic?
+ggplot(apca_scores_07, aes(x = date, y = source_5)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+# industrial
+ggplot(apca_scores_07, aes(x = date, y = source_6)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+```
+
+# day of week patterns including 2007
+
+```{r}
+
+apca_scores_07 <- apca_scores_07 %>% 
+  mutate(
+    day_of_week = as.character(wday(date, label = TRUE)),
+    day_of_week = factor(day_of_week,
+                         levels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))
+    )
+
+day_of_week_summary <- apca_scores_07 %>% 
+  pivot_longer(source_1:source_6,
+               names_to = "source",
+               values_to = "score") %>% 
+  group_by(day_of_week, source)
+
+ggplot(day_of_week_summary, aes(day_of_week, score)) +  
+  geom_bar(stat = "identity") + 
+  facet_grid(source~., scales = "free")
 
 ```
 
 
+Correlation Matrix
+
+```{r}
+apca_scores_07 %>% 
+  select(-concentration, -date, -day_of_week) %>% 
+  ggcorr(method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
+       label = TRUE, label_size = 3, label_alpha = TRUE, label_round = 2,
+       hjust = 1, size = 5, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: NYC Air Pollution APCA")
+
+```
+
+Let's say 5 is spark-ignition traffic and 1 is diesel + road dust. Why would traffic be correlated with industrial? Could diesel + road dust also include construction, as the trucks used for construction may be diesel engines?

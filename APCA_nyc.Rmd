@@ -67,9 +67,9 @@ dates <- tibble(seq(as.Date('2007-01-01'), as.Date('2015-12-31'), by = "days")) 
 time <- 
   left_join(dates, conc, by = "date")
 
-missingness <- 
+element_scatter <- 
   conc %>% 
-  ggplot(aes(x = date, y = EC)) +
+  ggplot(aes(x = date, y = cadmium)) +
   geom_point()
 
 ```
@@ -113,6 +113,15 @@ conc %>%
 
 # we will exclude the days surrounding 4th of july, which consistently have
 # unusually high potassium levels due to fireworks.
+
+#try the same thing with cadmium
+
+Cd_year <- conc %>% 
+  ggplot(aes(x = date, y = cadmium)) +
+  geom_line() +
+  xlab("") +
+  ggtitle("Cadmium concentrations by year")
+
 
 ```
 
