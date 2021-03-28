@@ -185,7 +185,7 @@ zspec_pm25 <-
 # factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
-     nfactors = 6, max.iter = 500,
+     nfactors = 10, max.iter = 500,
      rotate = "varimax",
      scores = "regression",
      SMC  = TRUE,
@@ -362,7 +362,7 @@ SA_Varimax <- mean_source %>%
     Pct_error = ((PredConc - MeanConc)/MeanConc)*100
   )
 
-i <- c(2:11)
+i <- c(2:15)
 SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
                     function(x)
                       round(x, digits = 2))
@@ -387,7 +387,9 @@ SA_proportion_full <- source_conc %>%
 Color.list <- glasbey(26)
 
 # make plot
-ggplot(SA_proportion_full, aes(x = element, y = source_percent)) + 
+SA_proportion_full %>% 
+  filter(element != "cadmium") %>% 
+ggplot(aes(x = element, y = source_percent)) + 
   geom_col(aes(color = element, fill = element)) +  # creates a column for each loading
   geom_hline(yintercept = 0, size = 0.2) + # creates a line at 0
   facet_wrap(. ~ srce_num) +                       # creates a distinct box for each PC 
@@ -473,60 +475,3 @@ pm25 <- source_conc %>%
 This dataset includes air pollution data from 3 monitors in NYC during the years
 2007-2015, excluding the dates surrounding 4th of July (7/2-7/6) from each year.
 
-For this experiment, we have a 6-factor solution.
-
-Sources plus notes comparing with other studies:
-
-1) road dust (?)
-  - Masiol et al. Zinc "At first glance, the factor 9 could be interpreted as road dust."
-    - mostly zinc, with moderate values of nickel, calcium, copper, manganese, and potassium
-    - mainly in winter
-    - zinc is a tracer for lubricating oil combustion, brake and tire wear aalong with manganese, iron, and copper
-    - decided this was not road dust because as particle sizes became smaller correlatioonos increased even though mass-relevant contributions are mainly in the 1-10 range, and it was strongly correlated with SO2
-    - instead thought this was a combustion source such as on-road diiesel truck traffic, ship traffic, or building heating
-  - Squizzato et al. road dust: Al, Si + Mg, Ca, Fe, Ti, Mn, Cu, OC, EC, sulfate, nitrate, Na, Cl
-  - it seems like our road dust looks different from Masiol's Zinc anyway (less zinc, more range of elements) and also different from Squizzato's road dust
-2) salt
-  - Masiol et al. fresh sea salt: chlorine, sodium, nitrate, sulfate, ammonium, EC, OC, Fe
-    - no clear seasonal/weekly patterns, but may be higher in winter due to northeasters
-    - possible crustaal particles in seawater leading to Al and Si
-    - watch out for one-day high peaks due to storms
-  - Masiol et al. sodium, Br, OC, sulfate, nitrate
-    - origin from coastal areas in southeaster US
-    - less chlorine than fresh salt
-  - Squizzato et aal. aged sea salt: Na + Mg, suflate, nitrate, OC, EC, low Cl
-  - Squizzato et al. road salt: Cl + OC, EC, nitrate, sulfate, Si, Ca, Fe
-  - Squizzato et al. fresh sea salt: Cl + Na, Ca, Mg
-  - our salt is really just chlorine, sodium, and magnesium but does also include Ba, Br, Ca, Ni, nitrate, K, selenium, silicon, vanadium, zinc
-3) crustal
- - Masiol et al. Al, Si + some K, Ca, Mn, Fe
-    - no weekly cycles, higher in spring and summer
- - aluminum, silicon, titanium, sulfur, vanadium, caaadmium, calcium, manganese, iron
- 4) regional/seecondary
- - Masiol et al. secndary ammonium sulfate: ammonium, sulfate, Br, OC, V
-    - emissions of SO2 from coal-fired power plants in upper Ohio River Valley
-    - biogenic and sea salt sulfate
-    - highest in summer, minimum on Saturdays (may not be a true pattern)
- - Masiol et al. secondary ammonium nitrate: ammonium, nitrate, Br, NO2
-    - higher concentrations in winter, no weekly patterns
- - Squizzato et al. secondary sulfate: sulfate, ammonium, OC, EC, selenium, vanadium, arsenic, bromine
-    - decrease over the years becaause of decreased coal use. also talk about residual oil here (could be combined?)
- - Squizzato et al. secondary nitrate: nitrate, ammonium, sulfate, OC, EC, higher in winter
-    - reductions in NYC related to less traffic (?)
- - We also have a lot of selenium, pretty high arsenic, and potassium in here (not mentioned in Masiol et al.)
- 5) traffic (?)
- - Masiol et al. EC and OC from primaary engine dust, V, Mn, Fe, Cu from road traffic emissions
-    - weekly patterns decreased on weekends
- - Squizzato et al. spark-ignition and diesel: OC, EC, Mg, Al, Si, Ca, Fe, Cu, Zn, Mn
- - EC, OC + pretty much everything else except sulfur sodium and ammonium. a lot of the barium, not so much vanadium
- 6) industrial (?)
- - it doesn't look like this is in the Masiol paper
- - Squizzato et al. industrial: Pb, Fe, Mn, Cu, Zn, As, Se
-    - Coke production: As, Zn, Se, and Pb
-    - Metal/steel: Pb, Fe, Mn, Cu, Zn
- - lots of chromium, copper, EC, iron, manganese, nickel, nitrate, vanadium, aluminum, ammonium, OC
-
-Masiol et al. Biomass Burning: K, OC, Br, EC, Ca, higher in summer
-Squizzato et al. biomass buring: K, OC, EC, sulfate, nitrate, Na, Al, Si, Cl, Ca, Fe, Zn, Br
-Masiol et al. Residual oil/domestic heating: vanadium, nickel, calcium, manganese, EC, iron, higher in winter
-Squizzato et al. residual oil: Ni, Mn, Zn, Ca
