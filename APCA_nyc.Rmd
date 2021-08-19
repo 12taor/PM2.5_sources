@@ -185,7 +185,7 @@ zspec_pm25 <-
 # factor analysis - must provide number of factors!
 factors <- 
   fa(zspec_pm25,
-     nfactors = 10, max.iter = 500,
+     nfactors = 6, max.iter = 500,
      rotate = "varimax",
      scores = "regression",
      SMC  = TRUE,
@@ -244,6 +244,7 @@ a <- conc %>%
   select(-min_num, -minimum)
 
 ```
+
 
 ```{r message=FALSE, warning=FALSE}
 # factor means
@@ -338,6 +339,12 @@ conc_long <- conc %>%
 
 source_conc <- left_join(sources, conc_long, by = c('element', 'date'))
 
+source_conc %>% 
+  filter(element == "pm25") %>% 
+  group_by(srce_num) %>% 
+  summarize(sd = sd(srce, na.rm = TRUE),
+            mean = mean(srce, na.rm = TRUE))
+
 # calculate mean source contributions for each element
 mean_source <- source_conc %>% 
   group_by(element, srce_num) %>% 
@@ -362,10 +369,12 @@ SA_Varimax <- mean_source %>%
     Pct_error = ((PredConc - MeanConc)/MeanConc)*100
   )
 
-i <- c(2:15)
+i <- c(2:11)
 SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
                     function(x)
                       round(x, digits = 2))
+
+#write_csv(SA_Varimax, "./experimental_results/SA_table.csv")
 
 SA_Varimax %>% kable(booktabs = T, align = "c") %>% 
   kable_styling(full_width = T)
@@ -387,18 +396,82 @@ SA_proportion_full <- source_conc %>%
 Color.list <- glasbey(26)
 
 # make plot
-SA_proportion_full %>% 
-  filter(element != "cadmium") %>% 
-ggplot(aes(x = element, y = source_percent)) + 
-  geom_col(aes(color = element, fill = element)) +  # creates a column for each loading
-  geom_hline(yintercept = 0, size = 0.2) + # creates a line at 0
-  facet_wrap(. ~ srce_num) +                       # creates a distinct box for each PC 
-  theme_bw() +                             # sets theme options
-  theme(axis.text.x = element_text(angle = 90)) +
+conc_levels_bar <- 
+  SA_proportion_full %>% 
+  mutate(
+    source_mean = ifelse(
+      element %in% 
+        c("OC", 
+          "nitrate", 
+          "ammonium", 
+          "sulfur", 
+          "EC"), 
+      source_mean/10, 
+      source_mean),
+    group = ifelse(
+      element %in% 
+        c("OC", 
+          "nitrate", 
+          "ammonium", 
+          "sulfur", 
+          "EC"), 
+      1, 0),
+    element = as_factor(element),
+    element = fct_relevel(element,
+                          "ammonium",
+                          "nitrate",
+                          "EC",
+                          "OC",
+                          "sulfur",
+                          "aluminum",
+                          "arsenic",
+                          "barium",
+                          "bromine",
+                          "cadmium",
+                          "calcium",
+                          "chlorine",
+                          "chromium",
+                          "copper",
+                          "iron",
+                          "lead",
+                          "magnesium",
+                          "manganese",
+                          "nickel",
+                          "potassium",
+                          "selenium",
+                          "silicon",
+                          "sodium",
+                          "titanium",
+                          "vanadium",
+                          "zinc"),
+    element = fct_recode(element, 
+                         "ammonium*" = "ammonium",
+                         "nitrate*" = "nitrate",
+                         "EC*" = "EC",
+                         "OC*" = "OC",
+                         "sulfur*" = "sulfur"),
+    srce_num = as_factor(srce_num),
+    srce_num = fct_recode(srce_num,
+                          "Nitrate" = "1",
+                          "Salt" = "2",
+                          "Crustal Dust" = "3",
+                          "Regional/Secondary" = "4",
+                          "Traffic and Road Dust" = "5",
+                          "Industrial" = "6")) %>%
+  ggplot(aes(x = element, y = source_mean, group = group)) + 
+  geom_col(aes(color = element, fill = element)) +
+  geom_hline(yintercept = 0, size = 0.2) + 
+  facet_wrap(. ~ srce_num) +
+  theme_bw() +  
+  theme(axis.text.x = element_blank(),
+        axis.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16, face = "bold"),
+        legend.title = element_blank(),
+        strip.text = element_text(face = "bold", size = 12)) +
   labs(x = expression("PM"[2.5]~"Constituents"),
-       y = "Loadings") + 
+       y = expression(paste("Predicted Average Concentration (", mu, "g/", m^3, ")*"))) +
   scale_color_manual(values = Color.list) +
-  scale_fill_manual(values = Color.list) 
+  scale_fill_manual(values = Color.list)
 
 
 
@@ -424,14 +497,26 @@ SA_proportion_long <- source_conc %>%
 
 source_pie <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
+  mutate(srce_num = plyr::mapvalues(srce_num,
+           from = c("1", "2", "3", "4", "5", "6"), 
+           to = c("Nitrate", "Salt", "Crustal Dust", "Secondary Sulfate", "Traffic + Road Dust", "Industrial"))) %>% 
   filter(element == "pm25") %>% 
   ggplot(aes(x = "", y = source_percent, fill = srce_num)) +
     geom_bar(stat = "identity", width = 1) +
     coord_polar("y", start = 0) +
     scale_fill_brewer(palette = "Spectral") +
-    theme_void()
+    theme_void() +
+    theme(legend.title = element_blank())
 
 source_pie
+
+vals <- c(48.9, 21.4, 15.9, 10.3, 1.96, 1.49)
+val_names <- c("Secondary Sulfate (48.9%)", "Traffic and Road Dust (21.4%)", "Crustal Dust (15.9%)", "Nitrate (10.3%)", "Industrial (1.49%)", "Salt (1.96%)")
+names(vals) <- val_names
+
+waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
+  ) +
+  theme(legend.text = element_text(face = "bold", size = 20))
 
 SA_proportion <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
@@ -475,3 +560,58 @@ pm25 <- source_conc %>%
 This dataset includes air pollution data from 3 monitors in NYC during the years
 2007-2015, excluding the dates surrounding 4th of July (7/2-7/6) from each year.
 
+For this experiment, we have a 6-factor solution.
+
+Sources plus notes comparing with other studies:
+
+1) traffic (?) - is this actually diesel?
+ - Masiol et al. EC and OC from primaary engine dust, V, Mn, Fe, Cu from road traffic emissions
+    - weekly patterns decreased on weekends
+ - Squizzato et al. spark-ignition and diesel: OC, EC, Mg, Al, Si, Ca, Fe, Cu, Zn, Mn
+2) salt
+  - Masiol et al. fresh sea salt: chlorine, sodium, nitrate, sulfate, ammonium, EC, OC, Fe
+    - no clear seasonal/weekly patterns, but may be higher in winter due to northeasters
+    - possible crustaal particles in seawater leading to Al and Si
+    - watch out for one-day high peaks due to storms
+  - Masiol et al. sodium, Br, OC, sulfate, nitrate
+    - origin from coastal areas in southeaster US
+    - less chlorine than fresh salt
+  - Squizzato et aal. aged sea salt: Na + Mg, suflate, nitrate, OC, EC, low Cl
+  - Squizzato et al. road salt: Cl + OC, EC, nitrate, sulfate, Si, Ca, Fe
+  - Squizzato et al. fresh sea salt: Cl + Na, Ca, Mg
+  - our salt is really just chlorine, sodium, and magnesium but does also include Ba, Br, Ca, Ni, nitrate, K, selenium, silicon, vanadium, zinc
+3) crustal
+ - Masiol et al. Al, Si + some K, Ca, Mn, Fe
+    - no weekly cycles, higher in spring and summer
+ - aluminum, silicon, titanium, sulfur, vanadium, caaadmium, calcium, manganese, iron
+4) regional/seecondary
+ - Masiol et al. secndary ammonium sulfate: ammonium, sulfate, Br, OC, V
+    - emissions of SO2 from coal-fired power plants in upper Ohio River Valley
+    - biogenic and sea salt sulfate
+    - highest in summer, minimum on Saturdays (may not be a true pattern)
+ - Masiol et al. secondary ammonium nitrate: ammonium, nitrate, Br, NO2
+    - higher concentrations in winter, no weekly patterns
+ - Squizzato et al. secondary sulfate: sulfate, ammonium, OC, EC, selenium, vanadium, arsenic, bromine
+    - decrease over the years becaause of decreased coal use. also talk about residual oil here (could be combined?)
+ - Squizzato et al. secondary nitrate: nitrate, ammonium, sulfate, OC, EC, higher in winter
+    - reductions in NYC related to less traffic (?)
+ - We also have a lot of selenium, pretty high arsenic, and potassium in here (not mentioned in Masiol et al.)
+5) road dust (?) - is this actually gasoline?
+  - Masiol et al. Zinc "At first glance, the factor 9 could be interpreted as road dust."
+    - mostly zinc, with moderate values of nickel, calcium, copper, manganese, and potassium
+    - mainly in winter
+    - zinc is a tracer for lubricating oil combustion, brake and tire wear aalong with manganese, iron, and copper
+    - decided this was not road dust because as particle sizes became smaller correlations increased even though mass-relevant contributions are mainly in the 1-10 range, and it was strongly correlated with SO2
+    - instead thought this was a combustion source such as on-road diiesel truck traffic, ship traffic, or building heating
+  - Squizzato et al. road dust: Al, Si + Mg, Ca, Fe, Ti, Mn, Cu, OC, EC, sulfate, nitrate, Na, Cl
+ 6) industrial (?)
+ - it doesn't look like this is in the Masiol paper
+ - Squizzato et al. industrial: Pb, Fe, Mn, Cu, Zn, As, Se
+    - Coke production: As, Zn, Se, and Pb
+    - Metal/steel: Pb, Fe, Mn, Cu, Zn
+ - lots of chromium, copper, EC, iron, manganese, nickel, nitrate, vanadium, aluminum, ammonium, OC
+
+Masiol et al. Biomass Burning: K, OC, Br, EC, Ca, higher in summer
+Squizzato et al. biomass buring: K, OC, EC, sulfate, nitrate, Na, Al, Si, Cl, Ca, Fe, Zn, Br
+Masiol et al. Residual oil/domestic heating: vanadium, nickel, calcium, manganese, EC, iron, higher in winter
+Squizzato et al. residual oil: Ni, Mn, Zn, Ca

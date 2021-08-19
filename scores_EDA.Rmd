@@ -40,8 +40,11 @@ apca_scores_07 <- read_csv("./data/apca_scores_07.csv")
 ## general info
 
 ```{r}
-summary(apca_scores_07)
+summary(apca_scores_07, round(digits = 2))
 
+summarize(apca_scores_07,
+          mean = mean(concentration, na.rm = TRUE),
+          sd = sd(concentration, na.rm = TRUE))
 # what do I do about negative scores? keep them
 # why are there 112 missings?
 ```
@@ -115,10 +118,19 @@ Correlation Matrix
 
 ```{r}
 apca_scores_07 %>% 
-  select(-concentration, -date, -day_of_week) %>% 
-  ggcorr(method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
+  select(-date, -day_of_week) %>% 
+  rename(
+    "Total PM" = concentration,
+    "Nitrate" = source_1,
+    "Salt" = source_2,
+    "Crustal" = source_3,
+    "Secondary" = source_4,
+    "Traffic" = source_5,
+    "Industrial" = source_6
+    ) %>% 
+  ggcorr(method = c("pairwise.complete.obs", "pearson"), limits = qFALSE,
        label = TRUE, label_size = 3, label_alpha = TRUE, label_round = 2,
-       hjust = 1, size = 5, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: NYC Air Pollution APCA")
+       hjust = 1, size = 5, color = "grey50", layout.exp = 4)
 
 ```
 

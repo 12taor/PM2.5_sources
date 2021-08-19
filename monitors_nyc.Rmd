@@ -61,14 +61,14 @@ rename_pollutants = function(df){
 }
 
 components_all <- 
-  read_csv("./data/pm2.5_components_daily_nyc_3sites_averg.csv") %>% 
+  read_csv("./data/old_nyc_datasets/pm2.5_components_daily_nyc_3sites_averg.csv") %>% 
   rename_pollutants()
 
 components_any <- 
-  read_csv("./data/pm2.5_components_daily_nyc_any3_averg.csv")
+  read_csv("./data/old_nyc_datasets/pm2.5_components_daily_nyc_any3_averg.csv")
 
 components_124 <- 
-  read_csv("./data/pm2.5_components_daily_nyc_site124.csv") %>% 
+  read_csv("./data/old_nyc_datasets/pm2.5_components_daily_nyc_site124.csv") %>% 
   rename_pollutants()
 
 total_pm2.5 <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv")
@@ -233,9 +233,45 @@ monitor_locations <-
   read_csv("./data/monitor_sites.csv") %>% 
   mutate(site_number = as.character(site_number))
 
+library(tigris)
+library(sp)
+library(rgdal)
+library(sf)
+
+lookup_code("New York", "New York")
+lookup_code("New York", "Kings")
+lookup_code("New York", "Queens")
+lookup_code("New York", "Bronx")
+lookup_code("New York", "Richmond")
+
+nyc_counties = st_read("data/cb_2018_us_county_500k/cb_2018_us_county_500k.shp") %>%
+  filter(STATEFP == "36",
+         COUNTYFP %in% c('061','047','081','005','085')
+         )
+
+st_crs(monitor_locations)
+st_crs(nyc_counties) # different
+
+monitor_locations = merge(nyc_counties, monitor_locations)
+
+st_crs(nyc_counties)
+
+names(nyc_counties)
+
+crs
+
+nyc_counties <- subset(counties, county %in% c('061','047','081','005','085'))
+
+summary(nyc_tracts)
+
+wgs84 <- CRS("+proj=longlat +datum=WGS84")
+
+monitor_locations <- spTransform(monitor_locations, CRS("+proj=longlat +datum=WGS84"))
+
 map <- leaflet(monitor_locations) %>% 
   addProviderTiles("CartoDB.PositronNoLabels") %>% 
-  addCircleMarkers(lng=~longitude, lat=~latitude, label =~site_number)
+  addPolygons(fill = FALSE) %>% 
+  addCircleMarkers(lng = ~longitude, lat = ~latitude, label = ~site_number)
 
 map
 
