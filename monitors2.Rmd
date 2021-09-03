@@ -1,0 +1,531 @@
+---
+title: "monitors_2"
+author: "Rachel Tao"
+date: "5/4/2021"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(ggcorrplot)
+library(gplots)
+library(GGally)
+library(knitr)
+library(patchwork)
+library(leaflet)
+
+knitr::opts_chunk$set(
+	fig.asp = 0.6,
+	fig.width = 6,
+	out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+#scale_colour_discrete = scale_colour_viridis_d
+#scale_fill_discrete = scale_fill_viridis_d
+```
+
+```{r load data, message=FALSE, warning=FALSE, include=FALSE}
+
+components_manhattan <- 
+  read_csv("./data/manhattan_daily_pm2.5_components.csv") %>% 
+  rename(ammonium = 'ammonium ion',
+         EC = 'elemental carbon',
+         OC = 'organic carbon',
+         potassium = 'potassium ion',
+         nitrate = 'total nitrate',) %>% 
+  filter(Date > "2006-12-31",
+         Date < "2016-01-01") %>% 
+  select(-antimony, -cobalt) %>% 
+  mutate(monitor = "manhattan")
+
+components_queens <- 
+  read_csv("./data/queens_daily_pm2.5_components.csv") %>% 
+  rename(ammonium = 'ammonium ion',
+         EC = 'elemental carbon',
+         OC = 'organic carbon',
+         potassium = 'potassium ion',
+         nitrate = 'total nitrate') %>% 
+  filter(Date > "2006-12-31",
+         Date < "2016-01-01") %>% 
+  select(-antimony, -cobalt) %>% 
+  mutate(monitor = "queens")
+
+components_bronx <- 
+  read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
+  rename(ammonium = 'ammonium ion',
+         EC = 'elemental carbon',
+         OC = 'organic carbon',
+         potassium = 'potassium ion',
+         nitrate = 'total nitrate') %>% 
+  filter(Date > "2006-12-31",
+         Date < "2016-01-01") %>% 
+  select(-antimony, -cobalt) %>% 
+  mutate(monitor = "bronx")
+
+components_any <- read_csv("./data/nyc_daily_pm2.5_components.csv") %>% 
+  rename(ammonium = 'ammonium ion',
+         EC = 'elemental carbon',
+         OC = 'organic carbon',
+         potassium = 'potassium ion',
+         nitrate = 'total nitrate') %>% 
+  filter(Date > "2006-12-31",
+         Date < "2016-01-01") %>% 
+  select(-antimony, -cobalt) 
+
+components_all <- rbind(components_manhattan, components_queens, components_bronx) %>% 
+  group_by(Date) %>% 
+  summarize(aluminum = mean(aluminum),
+            ammonium = mean(ammonium),
+            arsenic = mean(arsenic),
+            barium = mean(bromine),
+            bromine = mean(bromine),
+            cadmium = mean(cadmium),
+            calcium = mean(calcium),
+            chlorine = mean(chlorine),
+            copper = mean(copper),
+            EC = mean(EC),
+            iron = mean(iron),
+            lead = mean(lead),
+            magnesium = mean(magnesium),
+            manganese = mean(manganese),
+            nickel = mean(nickel),
+            OC = mean(OC),
+            potassium = mean(potassium),
+            selenium = mean(selenium),
+            silicon = mean(silicon),
+            sodium = mean(sodium),
+            sulfur = mean(sulfur),
+            titanium = mean(titanium),
+            nitrate = mean(nitrate),
+            vanadium = mean(vanadium),
+            zinc = mean(zinc)) %>% 
+  na.omit()
+
+pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>% 
+  rename(
+    Date = date_local,
+    pm25 = pm2.5_total
+  ) %>% 
+  select(Date, pm25)
+
+components_any_tot <- 
+  components_any %>%
+  left_join(pm25_tot, copy = TRUE) %>% 
+  relocate(Date, pm25)
+
+
+```
+
+```{r correlation matrix code, echo=FALSE, warning=FALSE}
+
+correlation_matrix <-   
+  components_any_tot %>% 
+  select(-sulfur, -pm25, -Date) %>% 
+  ggcorr(method = c("everything", "spearman"), limits = FALSE,
+       label = TRUE, label_size = 2, label_alpha = 0.75, geom = "tile",
+       hjust = 0.85, size = 3, color = "grey25", legend.size = 8, layout.exp = 3) + 
+       ggtitle("Any available monitor")
+
+```
+
+
+```{r missingness over time, echo=FALSE, message=FALSE, warning=FALSE}
+time_any <-   
+  components_any %>% 
+  select(Date) %>% 
+  mutate(
+    any_monitor = 1
+  )
+
+time_all <-   
+  components_all %>% 
+  select(Date) %>% 
+  mutate(
+    all_monitor = 5
+  )
+
+time_manhattan <- 
+  components_manhattan %>% 
+  select(Date) %>% 
+  mutate(
+    manhattan_monitor = 2
+  )
+
+time_queens <- 
+  components_queens %>% 
+  select(Date) %>% 
+  mutate(
+    queens_monitor = 3
+  )
+
+time_bronx <- 
+  components_bronx %>% 
+  select(Date) %>% 
+  mutate(
+    bronx_monitor = 4
+  )
+
+dates <- tibble(seq(as.Date('2006-12-31'), as.Date('2015-12-31'), by = "days")) %>% 
+  rename(Date = 'seq(as.Date("2006-12-31"), as.Date("2015-12-31"), by = "days")')
+
+time <- 
+  left_join(dates, time_any, by = "Date") %>% 
+  left_join(time_manhattan, by = "Date") %>% 
+  left_join(time_queens, by = "Date") %>% 
+  left_join(time_bronx, by = "Date") %>% 
+  left_join(time_all, by = "Date")
+
+missingness <- 
+  time %>% 
+  ggplot(aes(Date)) +
+  geom_point(data = time, aes(y = any_monitor, color = "darkgreen"), size = 0.5, alpha = 0.2) +
+  geom_point(data = time, aes(y = manhattan_monitor, color = "blue"), size = 0.5, alpha = 0.2) +
+  geom_point(data = time, aes(y = queens_monitor, color = "red"), size = 0.5, alpha = 0.2) +
+  geom_point(data = time, aes(y = bronx_monitor, color = "purple"), size = 0.5, alpha = 0.2) +
+  geom_point(data = time, aes(y = all_monitor, color = "orange"), size = 0.5, alpha = 0.2) +
+  scale_y_discrete(name = "", c("1.0", "2.0", "3.0", "4.0", "5.0"), c("Aggregated dataset", "Manhattan monitor", "Queens monitor", "Bronx monitor", "Missing Removed"), limits = c("1.0", "2.0", "3.0", "4.0", "5.0")) +
+  theme(legend.position = "none") +
+  xlab("Date") +
+  ylab("")
+
+```
+
+
+```{r PCA (any available monitor), echo=FALSE}
+
+components_any <- 
+  components_any %>% 
+  rename_pollutants() %>% 
+  select(-X1, -date_local, -sulfur)
+
+pca_any <- 
+  components_any %>%
+  scale(center = FALSE, scale = apply(components_any, 2, sd, na.rm = TRUE)) %>% 
+  prcomp()
+
+loadings_any <- 
+  pca_any$rotation %>% 
+  as_tibble() %>% 
+  mutate(Chemicals = colnames(components_any)) %>% 
+  select(Chemicals, PC1:PC6) %>% 
+  gather(key = Component, value = Loadings, -Chemicals) %>%
+  mutate(Chemicals = fct_inorder(Chemicals)) %>%
+  ggplot(aes(x = Chemicals, y = Loadings)) + geom_point() +
+  geom_segment(aes(yend=0, xend = Chemicals)) +
+  facet_wrap(.~Component) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        strip.background = element_blank()) +
+  ggtitle("Any available monitor")
+
+scores_pca <- pca_any$x
+
+```
+
+
+```{r PCA (all monitors available), echo=FALSE}
+components_all <- 
+  components_all %>% 
+  select(-date_local, -X1, -sulfur)
+
+pca_all <- 
+  components_all %>% 
+  scale(center = FALSE, scale = apply(components_all, 2, sd, na.rm = TRUE)) %>% 
+  prcomp()
+
+loadings_all <- 
+  pca_all$rotation %>% 
+  as_tibble() %>% 
+  mutate(Chemicals = colnames(components_all)) %>% 
+  select(Chemicals, PC1:PC6) %>% 
+  gather(key = Component, value = Loadings, -Chemicals) %>%
+  mutate(Chemicals = fct_inorder(Chemicals)) %>%
+  ggplot(aes(x = Chemicals, y = Loadings)) + geom_point() +
+  geom_segment(aes(yend=0, xend = Chemicals)) +
+  facet_wrap(.~Component) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        strip.background = element_blank()) +
+  ggtitle("All Monitors")
+
+scores_pca <- pca_all$x
+```
+
+
+```{r PCA (queens monitor), echo=FALSE}
+components_124 <- 
+  components_124 %>% 
+  select(-date_local, -X1, -sulfur)
+
+pca_124 <- 
+  components_124 %>% 
+  scale(center = FALSE, scale = apply(components_124, 2, sd, na.rm = TRUE)) %>% 
+  prcomp()
+
+loadings_124 <-   
+  pca_124$rotation %>% 
+  as_tibble() %>% 
+  mutate(Chemicals = colnames(components_124)) %>% 
+  select(Chemicals, PC1:PC6) %>% 
+  gather(key = Component, value = Loadings, -Chemicals) %>%
+  mutate(Chemicals = fct_inorder(Chemicals)) %>%
+  ggplot(aes(x = Chemicals, y = Loadings)) + geom_point() +
+  geom_segment(aes(yend=0, xend = Chemicals)) +
+  facet_wrap(.~Component) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        strip.background = element_blank()) +
+  ggtitle("Queens Monitor")
+
+scores_pca <- pca_124$x
+```
+
+### Map of monitor locations
+
+```{r map, echo=FALSE, message=FALSE}
+monitor_locations <- 
+  read_csv("./data/monitor_sites.csv") %>% 
+  mutate(site_number = as.character(site_number))
+
+library(tigris)
+library(sp)
+library(rgdal)
+library(sf)
+
+lookup_code("New York", "New York")
+lookup_code("New York", "Kings")
+lookup_code("New York", "Queens")
+lookup_code("New York", "Bronx")
+lookup_code("New York", "Richmond")
+
+nyc_counties = st_read("data/cb_2018_us_county_500k/cb_2018_us_county_500k.shp") %>%
+  filter(STATEFP == "36",
+         COUNTYFP %in% c('061','047','081','005','085')
+         )
+
+st_crs(monitor_locations)
+st_crs(nyc_counties) # different
+
+monitor_locations = merge(nyc_counties, monitor_locations)
+
+st_crs(nyc_counties)
+
+names(nyc_counties)
+
+crs
+
+nyc_counties <- subset(counties, county %in% c('061','047','081','005','085'))
+
+summary(nyc_tracts)
+
+wgs84 <- CRS("+proj=longlat +datum=WGS84")
+
+monitor_locations <- spTransform(monitor_locations, CRS("+proj=longlat +datum=WGS84"))
+
+map <- leaflet(monitor_locations) %>% 
+  addProviderTiles("CartoDB.PositronNoLabels") %>% 
+  addPolygons(fill = FALSE) %>% 
+  addCircleMarkers(lng = ~longitude, lat = ~latitude, label = ~site_number)
+
+map
+
+```
+
+We are looking at 3 different datasets:
+
+1) Queens monitor (also called monitor 124): This dataset includes a single monitor, the one at Queens College (see map above).
+2) All monitors: This dataset only includes days where all monitors are available, and takes the average of all 3
+3) Any monitor: This dataset takes the average of all monitors available on that day, no matter how many are available. This means that some days the value is an average of all 3 monitors, and some days it is the raw value for a single monitor.
+
+### Data availability over time at each monitor
+
+```{r echo=FALSE, warning=FALSE}
+missingness
+```
+
+The 'all monitors' dataset starts later than the other two datasets (around 2003) and also includes a gap of about 2-3 years from 2011-2014. The queens monitor and 'any monitor' dataset have full data 2001 onwards. For analyses, we should use the 'any monitors' dataset or the queens dataset so that we have data for the entire period of interest.
+
+### Distribution
+
+##### NOTES (potential measurement error):
+ - arsenic and selenium are not well-measured by the instrument
+ - sodium and sulfate are highly correlated because they have similar frequencies
+
+```{r echo=FALSE}
+components_any <- 
+  components_any %>% 
+  mutate(
+    dataset = "any_monitor"
+  )
+
+components_all <- 
+  components_all %>% 
+  mutate(
+    dataset = "all_monitors"
+  )
+
+components_124 <- 
+components_124 %>% 
+  mutate(
+    dataset = "queens_monitor"
+  )
+
+components <- 
+  bind_rows(components_any, components_all, components_124) %>% 
+  pivot_longer(aluminum:zinc,
+    names_to = "pollutant",
+    values_to  = "concentration"
+  )
+
+components95 <- 
+  bind_rows(components_any, components_all, components_124) %>% 
+  filter(
+    aluminum < quantile(aluminum, 0.95),
+    arsenic < quantile(arsenic, 0.95),
+    barium < quantile(barium, 0.95),
+    bromine < quantile(bromine, 0.95),
+    cadmium < quantile(cadmium, 0.95),
+    calcium < quantile(calcium, 0.95),
+    chromium < quantile(chromium, 0.95),
+    copper < quantile(copper, 0.95),
+    iron < quantile(iron, 0.95),
+    lead < quantile(lead, 0.95),
+    magnesium < quantile(magnesium, 0.95),
+    manganese < quantile(manganese, 0.95),
+    nickel < quantile(nickel, 0.95),
+    nitrates < quantile(nitrates, 0.95),
+    selenium < quantile(selenium, 0.95),
+    silicon < quantile(silicon, 0.95),
+    sulfate < quantile(sulfate, 0.95),
+    titanium < quantile(titanium, 0.95),
+    vanadium < quantile(vanadium, 0.95),
+    zinc < quantile(zinc, 0.95)
+    ) %>% 
+  pivot_longer(aluminum:zinc,
+    names_to = "pollutant",
+    values_to  = "concentration"
+  )
+
+```
+
+As a first pass, we can look at the distributions of each dataset side-by-side for each chemical:
+
+```{r violin, echo=FALSE}
+components %>% 
+  ggplot(aes(x = concentration, y = dataset, fill = dataset)) +
+  geom_violin(alpha = 0.5, trim = FALSE) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  theme(axis.title = element_blank()) +
+  ggtitle("Violin Plots: Full distributions all 3 datasets") +
+  theme(
+    axis.text = element_text(size = 4),
+    axis.title.y.left = element_text(size = 0))
+```
+
+Now, let's try an overlaid density plot to get a better sense of the distributions:
+
+```{r density 1, echo=FALSE}
+components %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_density(alpha = 0.5, trim = TRUE, position = "identity") +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Density Plots: Full distributions all 3 datasets") +
+  theme(
+    axis.text = element_text(size = 4)) 
+```
+
+The full distributions for many chemicals have long right tails, so it might be easier to visualize if we just take the bottom 95th%ile:
+
+```{r density 2, echo=FALSE}
+components95 %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_density(alpha = 0.5, trim = TRUE, position = "identity") +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Density Plots: Bottom 95th%ile all 3 datasets") +
+  theme(
+    axis.text = element_text(size = 4))
+```
+
+It looks like the Queens monitor is the only one that has a slightly different distribution across pollutants. Let's compare just the 'any' and 'all' datasets to see if their distributions match up when we remove the queens monitor's distribution:
+
+```{r density 3, echo=FALSE}
+components95 %>% 
+  filter(dataset != 'queens_monitor') %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_density(alpha = 0.5, trim = TRUE) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Density Plots: All vs. Any, Bottom 95th%ile") +
+  theme(
+    axis.text = element_text(size = 4))
+
+```
+
+Some of the density plots (especially for the low-concentration pollutants at the queens monitor) have 'bumpy' distributions. Is this a true signal or is it because the unit of measurement is 0.0001?
+
+```{r histogram, echo=FALSE}
+components95 %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 0.001) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Histograms bin = 0.001") +
+  theme(
+    axis.text = element_text(size = 4))
+```
+
+Although these histograms make it difficult to see the distributions for higher-concentration pollutants, we can see that the pollutants with lower concentrations no longer have the 'bumpy' distributions. Using a smaller bin size, we see similar patterns as in the density plot:
+
+```{r histogram 2, echo=FALSE}
+components95 %>% 
+  ggplot(aes(x = concentration, fill = dataset)) +
+  geom_histogram(alpha = 0.5, position = "identity", binwidth = 0.0005) +
+  facet_wrap(. ~pollutant, scales = "free") +
+  ggtitle("Histograms bin = 0.0005") +
+  theme(
+    axis.text = element_text(size = 4))
+```
+
+Based on the density plots, the 'any monitor available' and the 'all monitors' datasets appear to have similar distributions for all chemicals. The queens monitor has a slightly different distribution. Since the queens monitor has data availability for the entire study period, and the 'any monitor' dataset has variable numbers of observations per date, so we can use the 'any monitor' dataset for analyses and do a sensitivity analysis using the queens monitor dataset.
+
+### Correlation Matrix
+
+```{r correlation matrix, echo=FALSE}
+correlation_matrix
+```
+
+Correlations range from -0.1 to 0.7.
+
+### Principal Components Analysis
+
+```{r echo=FALSE}
+PCA_any <- pca_any$sdev^2/sum(pca_any$sdev^2) *100
+PCA_all <- pca_all$sdev^2/sum(pca_all$sdev^2) *100
+PCA_124 <- pca_124$sdev^2/sum(pca_124$sdev^2) *100
+round(cbind(Component = 1:20, PCA_any, PCA_all, PCA_124), 4) %>% kable()
+```
+
+The proportion of variation for each component is similar across datasets. This suggests that it is likely reasonable to assume that when use other dimensionality reduction techniques with the 'any monitor' dataset, the results would be similar if we used the 'all monitors' dataset or the queens dataset. The loadings are also similar across datasets.
+
+### Loadings
+
+```{r echo=FALSE}
+loadings_any
+```
+
+```{r echo=FALSE}
+loadings_all
+```
+
+```{r echo=FALSE}
+loadings_124
+```
+
+Most chemicals load on the first component for all 3 datasets. 
+
