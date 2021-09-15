@@ -48,12 +48,6 @@ scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 ```{r}
 # Load in total PM data
 
-pm_tot_bronx_2007 = 
-=======
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-
-# Load in data
-
 pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>% 
   rename(
     date = date_local,
@@ -62,7 +56,6 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   select(date, pm25)
 
 pm_tot_bronx = 
->>>>>>> 9a0e709598eb54ffa5b5bc3cfe6baa68ee87c4de
   GET("https://aqs.epa.gov/data/api/dailyData/bySite?email=rht2112@cumc.columbia.edu&key=greyheron84&param=88101&bdate=20070101&edate=20071231&state=36&county=005&site=0110") %>% 
   content("parsed")
 
@@ -75,33 +68,11 @@ pm_tot_bronx_2007 <- pm_tot_bronx$Data %>%
 #     arithmetic_mean
 #   )
 
-<<<<<<< HEAD
 bx_2007 = "https://aqs.epa.gov/data/api/dailyData/bySite?email=rht2112@cumc.columbia.edu&key=greyheron84&param=88101&bdate=20070101&edate=20071231&state=36&county=005&site=0110"
 
 years = c("08", "09", "10", "11", "12", "13", "14", "15")
 
 bx_links = str_replace_all(bx, "07", years) %>% as_tibble()
-
-bx_tot = GET(bx_links) %>% 
-  content("parsed")
-
-pm_tot_bronx = 
-  map(bx_links, ~ {
-    Sys.sleep(10)
-    GET})
-
-pm_tot_bronx_use = pm_tot_bronx %>% 
-  content("parsed")
-
-pars <- function(link) {
-  list <- GET(link)
-  content(list, "parsed")
-}
-
-for (link in bx_links) {
-  years <- GET(link)
-  content(years, "parsed")
-}
 
 ```
 
@@ -117,8 +88,6 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   ) %>% 
   select(date, pm25)
 
-=======
->>>>>>> 9a0e709598eb54ffa5b5bc3cfe6baa68ee87c4de
 all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
   janitor::clean_names() %>% 
   rename(ammonium = ammonium_ion,
