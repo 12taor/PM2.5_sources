@@ -55,6 +55,37 @@ pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>%
   ) %>% 
   select(date, pm25)
 
+pm25_tot_raw <- read_csv("./data/pm2.5_nyc_master.csv") %>% 
+  filter(site_num %in% c(110, 62, 134, 124))
+
+pm25_tot_raw %>% 
+  filter(site_num == 110) %>% 
+  select(poc, date_local) %>% 
+  group_by(poc) %>% 
+  summarize(max(date_local), min(date_local))
+
+pm25_tot_raw %>% select(site_num, poc) %>% unique()
+
+pm25_tot_raw %>% 
+  filter(
+    site_num == 110,
+    poc == 1
+    ) %>% 
+  select(date_local) %>% 
+  view()
+
+pm25_tot_raw %>% 
+  filter(site_num == 62) %>% 
+  select(poc, date_local) %>% 
+  group_by(poc) %>% 
+  summarize(max(date_local), min(date_local))
+
+pm25_tot_raw %>% 
+  filter(site_num == 134) %>% 
+  select(poc, date_local) %>% 
+  group_by(poc) %>% 
+  summarize(max(date_local), min(date_local))
+
 pm_tot_bronx = 
   GET("https://aqs.epa.gov/data/api/dailyData/bySite?email=rht2112@cumc.columbia.edu&key=greyheron84&param=88101&bdate=20070101&edate=20071231&state=36&county=005&site=0110") %>% 
   content("parsed")
