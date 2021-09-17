@@ -86,24 +86,6 @@ pm25_tot_raw %>%
   group_by(poc) %>% 
   summarize(max(date_local), min(date_local))
 
-pm_tot_bronx = 
-  GET("https://aqs.epa.gov/data/api/dailyData/bySite?email=rht2112@cumc.columbia.edu&key=greyheron84&param=88101&bdate=20070101&edate=20071231&state=36&county=005&site=0110") %>% 
-  content("parsed")
-
-pm_tot_bronx_2007 <- pm_tot_bronx$Data %>%
-  map(as_tibble) %>% 
-  bind_rows() %>% 
-  filter(pollutant_standard == "PM25 24-hour 2012") #%>% 
-# #  select(
-#     date_local,
-#     arithmetic_mean
-#   )
-
-bx_2007 = "https://aqs.epa.gov/data/api/dailyData/bySite?email=rht2112@cumc.columbia.edu&key=greyheron84&param=88101&bdate=20070101&edate=20071231&state=36&county=005&site=0110"
-
-years = c("08", "09", "10", "11", "12", "13", "14", "15")
-
-bx_links = str_replace_all(bx, "07", years) %>% as_tibble()
 
 ```
 
