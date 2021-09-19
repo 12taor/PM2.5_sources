@@ -48,7 +48,12 @@ scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 
 # Load in PM data
 
-pm25_tot <- read_csv("./data/pm2.5_tot_nyc.csv")
+pm25_tot_bx <- read_csv("./data/pm2.5_tot_nyc.csv") %>% 
+  filter(site == "bronx") %>% 
+  select(date_local, pm_tot) %>% 
+  rename(
+    date = date_local,
+    pm25 = pm_tot)
 
 all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
   janitor::clean_names() %>% 
@@ -60,9 +65,9 @@ all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>%
   filter(date > "2006-12-31",
          date < "2016-01-01")
 
-conc <- all_elements %>% 
+conc <- all_elements_bx %>% 
   select(-antimony, -cobalt) %>% 
-  left_join(pm25_tot, by = "date") %>% 
+  left_join(pm25_tot_bx, by = "date") %>% 
   relocate(date, pm25)
 
 # multiply all concentrations by 1000 to convert to ng/m3
@@ -89,9 +94,9 @@ element_scatter <-
 ```{r}
 # correlation matrix
 
-ggcorr(all_elements, method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
+ggcorr(all_elements_bx, method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
        label = TRUE, label_size = 1.5, label_alpha = TRUE,
-       hjust = 1, size = 3, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: NYC Air Pollution Dataset")
+       hjust = 1, size = 3, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: Bronx Air Pollution Dataset")
 
 ```
 
@@ -101,7 +106,7 @@ ggcorr(all_elements, method = c("pairwise.complete.obs", "pearson"), limits = FA
 
 K_year <- conc %>% 
   mutate(year = format(date, "%Y"),
-         CommonDate = as.Date(paste0("2009", format(date, "%j")), "%Y-%j")) %>%
+         CommonDate = as.Date(paste0("2014", format(date, "%j")))) %>%
   ggplot(aes(x = CommonDate, y = potassium)) +
   geom_line() +
   facet_grid(facets = year ~., margins = FALSE) +
@@ -290,6 +295,8 @@ regress = function(y) {
 
 # independent variables for regression will be factors from factor analysis. define these as 'x'
 x <- a %>% 
+  group_by(factor_num) %>%
+  mutate(row = row_number()) %>% 
   pivot_wider(everything(),
               names_from = factor_num,
               names_prefix = "factor_",
@@ -456,20 +463,21 @@ conc_levels_bar <-
                           "titanium",
                           "vanadium",
                           "zinc"),
-    element = fct_recode(element, 
-                         "ammonium*" = "ammonium",
-                         "nitrate*" = "nitrate",
-                         "EC*" = "EC",
-                         "OC*" = "OC",
-                         "sulfur*" = "sulfur"),
+    # element = fct_recode(element, 
+    #                      "ammonium*" = "ammonium",
+    #                      "nitrate*" = "nitrate",
+    #                      "EC*" = "EC",
+    #                      "OC*" = "OC",
+    #                      "sulfur*" = "sulfur"),
     srce_num = as_factor(srce_num),
-    srce_num = fct_recode(srce_num,
-                          "Nitrate" = "1",
-                          "Salt" = "2",
-                          "Crustal Dust" = "3",
-                          "Regional/Secondary" = "4",
-                          "Traffic and Road Dust" = "5",
-                          "Industrial" = "6")) %>%
+    # srce_num = fct_recode(srce_num,
+    #                       "Nitrate" = "1",
+    #                       "Salt" = "2",
+    #                       "Crustal Dust" = "3",
+    #                       "Regional/Secondary" = "4",
+    #                       "Traffic and Road Dust" = "5",
+    #                       "Industrial" = "6")
+    ) %>%
   ggplot(aes(x = element, y = source_mean, group = group)) + 
   geom_col(aes(color = element, fill = element)) +
   geom_hline(yintercept = 0, size = 0.2) + 
@@ -509,9 +517,10 @@ SA_proportion_long <- source_conc %>%
 
 source_pie <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
-  mutate(srce_num = plyr::mapvalues(srce_num,
-           from = c("1", "2", "3", "4", "5", "6"), 
-           to = c("Nitrate", "Salt", "Crustal Dust", "Secondary Sulfate", "Traffic + Road Dust", "Industrial"))) %>% 
+  # mutate(srce_num = plyr::mapvalues(srce_num,
+  #          from = c("1", "2", "3", "4", "5", "6"), 
+  #          to = c("Nitrate", "Salt", "Crustal Dust", "Secondary Sulfate", "Traffic + Road Dust", "Industrial"))
+  #        ) %>% 
   filter(element == "pm25") %>% 
   ggplot(aes(x = "", y = source_percent, fill = srce_num)) +
     geom_bar(stat = "identity", width = 1) +
@@ -522,13 +531,13 @@ source_pie <- SA_proportion_long %>%
 
 source_pie
 
-vals <- c(48.9, 21.4, 15.9, 10.3, 1.96, 1.49)
-val_names <- c("Secondary Sulfate (48.9%)", "Traffic and Road Dust (21.4%)", "Crustal Dust (15.9%)", "Nitrate (10.3%)", "Industrial (1.49%)", "Salt (1.96%)")
-names(vals) <- val_names
-
-waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
-  ) +
-  theme(legend.text = element_text(face = "bold", size = 20))
+# vals <- c(48.9, 21.4, 15.9, 10.3, 1.96, 1.49)
+# val_names <- c("Secondary Sulfate (48.9%)", "Traffic and Road Dust (21.4%)", "Crustal Dust (15.9%)", "Nitrate (10.3%)", "Industrial (1.49%)", "Salt (1.96%)")
+# names(vals) <- val_names
+# 
+# waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
+#   ) +
+#   theme(legend.text = element_text(face = "bold", size = 20))
 
 SA_proportion <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
@@ -553,6 +562,7 @@ SA_bar <- SA_proportion_long %>%
   scale_fill_brewer(palette = "Spectral")
 
 SA_bar
+
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
