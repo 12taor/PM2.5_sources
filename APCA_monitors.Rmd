@@ -44,90 +44,9 @@ scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 
 ```
 
-
-```{r}
-# Load in total PM data
-
-pm25_tot_avg <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>% 
-  rename(
-    date = date_local,
-    pm25 = pm2.5_total
-  ) %>% 
-  select(date, pm25)
-
-pm25_tot_raw <- read_csv("./data/pm2.5_nyc_master.csv") %>% 
-  filter(
-    site_num %in% c(110, 62, 134, 124),
-    date_local > "2006-12-31"
-    )
-
-pm25_tot_raw %>% 
-  filter(site_num == 110) %>% 
-  select(poc, date_local) %>% 
-  group_by(poc) %>% 
-  summarize(max(date_local), min(date_local))
-
-pm25_tot_raw %>% select(site_num, poc) %>% unique()
-
-pm25_tot_raw %>% 
-  filter(
-    site_num == 110,
-    poc == 1
-    ) %>% 
-  select(date_local) %>% 
-  view()
-
-pm25_tot_raw %>% 
-  filter(site_num == 62) %>% 
-  select(poc, date_local) %>% 
-  group_by(poc) %>% 
-  summarize(max(date_local), min(date_local))
-
-pm25_tot_raw %>% 
-  filter(site_num == 134) %>% 
-  select(poc, date_local) %>% 
-  group_by(poc) %>% 
-  summarize(max(date_local), min(date_local))
-
-missingness_poc_bx <- pm25_tot_raw %>% 
-  filter(
-    site_num == 110,
-    date_local < "2010-06-12"
-    ) %>% 
-  select(poc, date_local, arithmetic_mean) %>% 
-  pivot_wider(
-    names_from = poc,
-    values_from = arithmetic_mean
-    ) %>% 
-  mutate(
-    pmtot = ifelse(is.na(`1`) == FALSE, `1`, `2`)
-  )
-
-missingness_poc_bx %>% view()
-
-is.na(missingness_poc_bx$`1`) %>% sum()
-
-pm25_tot <- pm25_tot_raw %>% 
-  pivot_wider(
-    names_from = poc,
-    values_from = arithmetic_mean
-  ) %>% 
-  mutate(
-    pm_tot = ifelse(is.na(`1`) == FALSE, `1`, `2`),
-    site = case_when(
-      site_num == 110 ~ "bronx",
-      site_num %in% c(62, 134) ~ "manhattan",
-      site_num == 124 ~ "queens"
-    )
-  ) %>% 
-  select(site_num, date_local, pm_tot, site)
-  
-```
-
-
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
-# Load in speciated PM data
+# Load in PM data
 
 pm25_tot <- read_csv("./data/pm2.5_tot_nyc.csv")
 
