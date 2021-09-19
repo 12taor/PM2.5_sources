@@ -44,7 +44,7 @@ scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 
 ```
 
-<<<<<<< HEAD
+
 ```{r}
 # Load in total PM data
 
@@ -129,12 +129,7 @@ pm25_tot <- pm25_tot_raw %>%
 
 # Load in speciated PM data
 
-pm25_tot <- read_csv("./data/pm2.5_total_components_daily_nyc_avg.csv") %>% 
-  rename(
-    date = date_local,
-    pm25 = pm2.5_total
-  ) %>% 
-  select(date, pm25)
+pm25_tot <- read_csv("./data/pm2.5_tot_nyc.csv")
 
 all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
   janitor::clean_names() %>% 
