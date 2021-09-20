@@ -1,0 +1,582 @@
+---
+title: "APCA_monitors"
+author: "Rachel Tao"
+date: "9/3/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse) 
+library(lubridate) 
+library(ggmap) 
+library(ggcorrplot) 
+library(ggplot2) 
+library(gplots)
+library(ggfortify) 
+library(ggrepel) 
+library(gridExtra) 
+library(GPArotation) 
+library(GGally) 
+library(knitr) 
+library(patchwork) 
+library(psych) 
+library(factoextra) 
+library(RColorBrewer) 
+library(kableExtra) 
+library(pals)
+library(httr)
+
+knitr::opts_chunk$set(
+	echo = FALSE,
+	fig.asp = 0.6,
+	fig.width = 6,
+	warning = FALSE,
+	out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_brewer(palette = "Spectral")
+scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Load in PM data
+
+pm25_tot_bx <- read_csv("./data/pm2.5_tot_nyc.csv") %>% 
+  filter(site == "bronx") %>% 
+  select(date_local, pm_tot) %>% 
+  rename(
+    date = date_local,
+    pm25 = pm_tot)
+
+all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
+  janitor::clean_names() %>% 
+  rename(ammonium = ammonium_ion,
+         EC = elemental_carbon,
+         OC = organic_carbon,
+         potassium = potassium_ion,
+         nitrate = total_nitrate) %>% 
+  filter(date > "2006-12-31",
+         date < "2016-01-01")
+
+conc <- all_elements_bx %>% 
+  select(-antimony, -cobalt) %>% 
+  left_join(pm25_tot_bx, by = "date") %>% 
+  relocate(date, pm25)
+
+# multiply all concentrations by 1000 to convert to ng/m3
+i <- c(2:28)
+conc[ , i] <- apply(conc[ , i], 2,
+                    function(x)
+                      x*1000)
+
+missing_element <- sapply(conc, function(x) sum(is.na(x))/nrow(conc))
+
+dates <- tibble(seq(as.Date('2007-01-01'), as.Date('2015-12-31'), by = "days")) %>% 
+  rename(date = 'seq(as.Date("2007-01-01"), as.Date("2015-12-31"), by = "days")')
+
+time <- 
+  left_join(dates, conc, by = "date")
+
+element_scatter <- 
+  conc %>% 
+  ggplot(aes(x = date, y = cadmium)) +
+  geom_point()
+
+```
+
+```{r}
+# correlation matrix
+
+ggcorr(all_elements_bx, method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
+       label = TRUE, label_size = 1.5, label_alpha = TRUE,
+       hjust = 1, size = 3, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: Bronx Air Pollution Dataset")
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# which days have unusually high levels of potassium?
+
+K_year <- conc %>% 
+  mutate(year = format(date, "%Y"),
+         CommonDate = as.Date(paste0("2014", format(date, "%j")))) %>%
+  ggplot(aes(x = CommonDate, y = potassium)) +
+  geom_line() +
+  facet_grid(facets = year ~., margins = FALSE) +
+  scale_x_date(
+    labels = function(x) format(x, "%d-%b"),
+    breaks = "month") +
+  xlab("") +
+  ggtitle("Potassium concentrations by year")
+
+K_year
+
+conc %>% 
+  select(date, potassium) %>% 
+  filter(potassium > 200) %>% 
+  kable(caption = "dates  where Potassium > 200 ng/m3")
+
+conc %>% 
+  select(date, potassium) %>% 
+  filter(potassium > 150) %>% 
+  kable(caption = "dates  where Potassium > 150 ng/m3")
+
+# we will exclude the days surrounding 4th of july, which consistently have
+# unusually high potassium levels due to fireworks.
+
+#try the same thing with cadmium
+
+Cd_year <- conc %>% 
+  ggplot(aes(x = date, y = cadmium)) +
+  geom_line() +
+  xlab("") +
+  ggtitle("Cadmium concentrations by year")
+
+
+```
+
+
+```{r}
+# finish cleaning data using information about fireworks
+
+fireworks <- as_date(c(
+                     ymd("2007-07-02"):ymd("2007-07-06"),
+                     ymd("2008-07-02"):ymd("2008-07-06"),
+                     ymd("2009-07-02"):ymd("2009-07-06"),
+                     ymd("2010-07-02"):ymd("2010-07-06"),
+                     ymd("2011-07-02"):ymd("2011-07-06"),
+                     ymd("2012-07-02"):ymd("2012-07-06"),
+                     ymd("2013-07-02"):ymd("2013-07-06"),
+                     ymd("2014-07-02"):ymd("2014-07-06"),
+                     ymd("2015-07-02"):ymd("2015-07-06")))
+
+conc <- conc %>%
+  filter(!(date %in% fireworks )) #filter out 4th of July fireworks!
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Means, correlations and variances
+
+conc_corr <- 
+  conc %>% 
+  select(-date)
+
+corr <- 
+  summarize(conc_corr, corr = cor(conc_corr, use = "pairwise.complete.obs"))
+
+conc_summarize <- 
+  conc_corr %>% 
+  pivot_longer(everything(),
+               names_to = "element",
+               values_to = "concentration") %>% 
+  group_by(element)
+
+means <- conc_summarize %>% 
+  summarize(mean = mean(concentration, na.rm = TRUE)) %>% 
+  arrange(element)
+
+vars <- conc_summarize %>% 
+  summarize(variance = var(concentration, na.rm = TRUE)) %>% 
+  arrange(element)
+
+```
+
+```{r PROVIDE FACTORS, echo=FALSE, message=FALSE, warning=FALSE}
+# Scaled factor analysis - must provide number of factors here
+
+# set mean = 0, SD = 1
+zspec_pm25 <- 
+  conc %>% 
+  select(-date, -pm25) %>% 
+  scale(center = TRUE, scale = TRUE)
+
+# factor analysis - must provide number of factors!
+factors <- 
+  fa(zspec_pm25,
+     nfactors = 6, max.iter = 500,
+     rotate = "varimax",
+     scores = "regression",
+     SMC  = TRUE,
+     fm = "pa")
+
+# calculate factor scores, loadings, and weights (aka standardized scoring coefficients)
+fact <- as_tibble(factors$scores)
+loadings <- factors$loadings
+factor_stat <- factors$weights %>% 
+  as_tibble(rownames = NA) %>% 
+  rownames_to_column("element") %>% 
+  arrange(element)
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# calculate absolute factor scores for each day (Equations 5-7 in statistical methods of Kavouras 2001)
+
+# join standardized scoring coefficients with means and variances
+coeff <- left_join(means, vars, by = "element") %>% 
+  left_join(factor_stat, by = "element")
+
+# calculate minimum values to find absolute factor scores (equations 5 and 6)
+min <- coeff %>% 
+  pivot_longer(contains("PA"),
+               names_to = "factor_num",
+               names_prefix = "PA",
+               values_to = "factor_coeff") %>% 
+  mutate(minimum = factor_coeff*(-mean/(variance^(1/2)))) %>% 
+  select(element, factor_num, minimum) %>% 
+  group_by(factor_num) %>% 
+  summarize(sum = sum(minimum, na.rm = TRUE)) %>% 
+  pivot_wider(factor_num:sum,
+              names_from = factor_num,
+              names_prefix = "minimum_",
+              values_from = sum)
+
+# reattach factor scores to dates and calculate absolute factor scores for each day
+# (equation 7)
+a <- conc %>% 
+  select(date) %>% 
+  cbind(fact) %>% 
+  pivot_longer(contains("PA"),
+               names_to = "factor_num",
+               names_prefix = "PA",
+               values_to = "factor_score") %>% 
+  mutate(factor_num = as.numeric(factor_num)) %>% 
+  cbind(min) %>% 
+  pivot_longer(contains("minimum"),
+               names_to = "min_num",
+               names_prefix = "minimum_",
+               values_to = "minimum") %>% 
+  mutate(min_num = as.numeric(min_num)) %>% 
+  filter(factor_num == min_num) %>% 
+  mutate(factor_score = factor_score - minimum) %>% 
+  select(-min_num, -minimum)
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+# factor means
+
+# this is a check - not necessary for next steps
+factor_means <- a %>% 
+  select(factor_num, factor_score) %>% 
+  group_by(factor_num) %>% 
+  summarize(mean_score = mean(factor_score, na.rm = TRUE))
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Regress each element on factors to see source contribution
+
+# define 'regress' as regression function with y as dependent variable and x as independent variable(s)
+# return tidy output for beta values and r-squared value
+regress = function(y) {
+  
+  z = lm(y ~ x)
+  
+  r.squared = broom::glance(z) %>% select(r.squared)
+
+  betas = broom::tidy(z) %>% pivot_wider(term:estimate,
+                                         names_from = "term",
+                                         values_from = "estimate")
+  
+  return(cbind(r.squared, betas))
+  
+}
+
+# independent variables for regression will be factors from factor analysis. define these as 'x'
+x <- a %>% 
+  group_by(factor_num) %>%
+  mutate(row = row_number()) %>% 
+  pivot_wider(everything(),
+              names_from = factor_num,
+              names_prefix = "factor_",
+              values_from = factor_score) %>% 
+  select(contains("factor")) %>% as.matrix()
+
+# dependent variable for regression will be actual element concentration. define this as y.
+y <- conc %>% select(-date)
+
+# repeat 'regress' for each element using 'x' as factors and 'y' as concentrations)
+regress <- map(y, regress) %>% 
+  enframe(name = "element") %>% 
+  unnest(c(value)) %>% 
+  janitor::clean_names() %>% 
+  rename_at(vars(contains("factor")), funs(str_replace(., "xfactor", "beta")))
+
+# dataset storing r-squared values
+r <- regress %>% 
+  select(element, r_squared)
+
+# dataset storing beta values
+betas <- regress %>% 
+  select(element, starts_with("beta")) %>% 
+  nest(betas = starts_with("beta"))
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# calculate source contributions
+
+# combine betas with factor scores in a list 
+sources = lapply(betas$betas, cbind, a)
+
+# in the above step, element names are automatically removed. rename list elements:
+names(sources) <- betas$element
+
+# calculate source contributions by multiplying absolute factor scores by beta values
+sources <- lapply(sources, as_tibble) %>% 
+  bind_rows(.id = "element") %>%
+  pivot_longer(starts_with("beta"),
+               names_to = "beta_num",
+               names_prefix = "beta_",
+               values_to = "beta_value") %>% 
+  mutate(
+    beta_num = as.numeric(beta_num)
+  ) %>% 
+  filter(factor_num == beta_num) %>% 
+  mutate(
+    srce = factor_score*beta_value
+  ) %>% 
+  mutate(srce_num = as.character(beta_num)) %>% 
+  select(element, date, srce_num, srce) 
+
+conc_long <- conc %>% 
+  pivot_longer(!date,
+               names_to = "element",
+               values_to = "concentration") %>% 
+  arrange(element)
+
+source_conc <- left_join(sources, conc_long, by = c('element', 'date'))
+
+source_conc %>% 
+  filter(element == "pm25") %>% 
+  group_by(srce_num) %>% 
+  summarize(sd = sd(srce, na.rm = TRUE),
+            mean = mean(srce, na.rm = TRUE))
+
+# calculate mean source contributions for each element
+mean_source <- source_conc %>% 
+  group_by(element, srce_num) %>% 
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  pivot_wider(names_from = "srce_num",
+              names_prefix = "source_",
+              values_from = "source_mean")
+
+```
+
+## Loadings
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Source contributions to each component of PM2.5
+
+# calculate mean predicted concentration and percent error
+SA_Varimax <- mean_source %>% 
+  ungroup(element) %>% 
+  left_join(r, by = "element") %>% 
+  mutate(
+    PredConc = reduce(select(., contains("source")), `+`),
+    Pct_error = ((PredConc - MeanConc)/MeanConc)*100
+  )
+
+i <- c(2:11)
+SA_Varimax[ , i] <- apply(SA_Varimax[ , i], 2,
+                    function(x)
+                      round(x, digits = 2))
+
+#write_csv(SA_Varimax, "./experimental_results/SA_table.csv")
+
+SA_Varimax %>% kable(booktabs = T, align = "c") %>% 
+  kable_styling(full_width = T)
+
+# calculate proportion of each element coming from each source
+
+SA_proportion_full <- source_conc %>% 
+  group_by(element, srce_num) %>% 
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(element) %>% 
+  mutate(
+    total = sum(source_mean),
+    source_percent = round((source_mean/total)*100, digits = 2)) %>% 
+  filter(element != "pm25")
+
+# choose color palette
+Color.list <- glasbey(26)
+
+# make plot
+conc_levels_bar <- 
+  SA_proportion_full %>% 
+  mutate(
+    source_mean = ifelse(
+      element %in% 
+        c("OC", 
+          "nitrate", 
+          "ammonium", 
+          "sulfur", 
+          "EC"), 
+      source_mean/10, 
+      source_mean),
+    group = ifelse(
+      element %in% 
+        c("OC", 
+          "nitrate", 
+          "ammonium", 
+          "sulfur", 
+          "EC"), 
+      1, 0),
+    element = as_factor(element),
+    element = fct_relevel(element,
+                          "ammonium",
+                          "nitrate",
+                          "EC",
+                          "OC",
+                          "sulfur",
+                          "aluminum",
+                          "arsenic",
+                          "barium",
+                          "bromine",
+                          "cadmium",
+                          "calcium",
+                          "chlorine",
+                          "chromium",
+                          "copper",
+                          "iron",
+                          "lead",
+                          "magnesium",
+                          "manganese",
+                          "nickel",
+                          "potassium",
+                          "selenium",
+                          "silicon",
+                          "sodium",
+                          "titanium",
+                          "vanadium",
+                          "zinc"),
+    # element = fct_recode(element, 
+    #                      "ammonium*" = "ammonium",
+    #                      "nitrate*" = "nitrate",
+    #                      "EC*" = "EC",
+    #                      "OC*" = "OC",
+    #                      "sulfur*" = "sulfur"),
+    srce_num = as_factor(srce_num),
+    # srce_num = fct_recode(srce_num,
+    #                       "Nitrate" = "1",
+    #                       "Salt" = "2",
+    #                       "Crustal Dust" = "3",
+    #                       "Regional/Secondary" = "4",
+    #                       "Traffic and Road Dust" = "5",
+    #                       "Industrial" = "6")
+    ) %>%
+  ggplot(aes(x = element, y = source_mean, group = group)) + 
+  geom_col(aes(color = element, fill = element)) +
+  geom_hline(yintercept = 0, size = 0.2) + 
+  facet_wrap(. ~ srce_num) +
+  theme_bw() +  
+  theme(axis.text.x = element_blank(),
+        axis.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16, face = "bold"),
+        legend.title = element_blank(),
+        strip.text = element_text(face = "bold", size = 12)) +
+  labs(x = expression("PM"[2.5]~"Constituents"),
+       y = expression(paste("Predicted Average Concentration (", mu, "g/", m^3, ")*"))) +
+  scale_color_manual(values = Color.list) +
+  scale_fill_manual(values = Color.list)
+
+
+
+# calculate proportion of each element coming from each source 
+# (negative values from SA_Varimax converted to 0%)
+SA_proportion_long <- source_conc %>% 
+  group_by(element, srce_num) %>% 
+  summarize(source_mean = mean(srce, na.rm = TRUE),
+            MeanConc = mean(concentration, na.rm = TRUE)) %>% 
+  mutate(
+    source_mean = if_else(source_mean < 0, 0, source_mean)) %>% 
+  ungroup() %>% 
+  group_by(element) %>% 
+  mutate(
+    total = sum(source_mean),
+    source_percent = round((source_mean/total)*100, digits = 2))
+
+```
+
+## Source proportions
+```{r echo=FALSE}
+# make the table nicer to look at
+
+source_pie <- SA_proportion_long %>% 
+  relocate(element, srce_num, source_percent) %>% 
+  # mutate(srce_num = plyr::mapvalues(srce_num,
+  #          from = c("1", "2", "3", "4", "5", "6"), 
+  #          to = c("Nitrate", "Salt", "Crustal Dust", "Secondary Sulfate", "Traffic + Road Dust", "Industrial"))
+  #        ) %>% 
+  filter(element == "pm25") %>% 
+  ggplot(aes(x = "", y = source_percent, fill = srce_num)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar("y", start = 0) +
+    scale_fill_brewer(palette = "Spectral") +
+    theme_void() +
+    theme(legend.title = element_blank())
+
+source_pie
+
+SA_proportion_long %>% filter(element == "pm25")
+
+vals <- c(21.2, 17.5, 43.8, 3.64, 4.75, 9.09)
+val_names <- c("1 (21.2%)", "2 (17.5%)", "3 (43.8%)", "4 (3.64%)", "5 (4.75%)", "6 (9.09%)")
+names(vals) <- val_names
+
+waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
+  ) +
+  theme(legend.text = element_text(face = "bold", size = 20))
+
+SA_proportion <- SA_proportion_long %>% 
+  relocate(element, srce_num, source_percent) %>% 
+  filter(element != "pm25") %>% 
+  pivot_wider(element:source_percent,
+              names_from = srce_num,
+              names_prefix = "source_",
+              values_from = source_percent)
+
+```
+
+## Bar graph of the above proportions
+```{r echo=FALSE}
+# bar graph showing proportion of each element coming from each source
+SA_bar <- SA_proportion_long %>% 
+  ungroup() %>% 
+  ggplot(aes(x = element, y = source_mean, fill = srce_num)) +
+  geom_col(position = "fill") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ylab("") +
+  xlab("") +
+  scale_fill_brewer(palette = "Spectral")
+
+SA_bar
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# source contributions to total pm2.5
+pm25 <- source_conc %>% 
+  filter(element == 'pm25') %>% 
+  select(-element) %>% 
+  pivot_wider(names_from = srce_num,
+              names_prefix = "source_",
+              values_from = srce)
+
+
+# write_csv(pm25, "./experimental_results/apca_scores.csv")
+
+```
