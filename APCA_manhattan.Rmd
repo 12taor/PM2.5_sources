@@ -48,14 +48,14 @@ scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 
 # Load in PM data
 
-pm25_tot_bx <- read_csv("./data/pm2.5_tot_nyc.csv") %>% 
-  filter(site == "bronx") %>% 
+pm25_tot_man <- read_csv("./data/pm2.5_tot_nyc.csv") %>% 
+  filter(site == "manhattan") %>% 
   select(date_local, pm_tot) %>% 
   rename(
     date = date_local,
     pm25 = pm_tot)
 
-all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
+all_elements_man <- read_csv("./data/manhattan_daily_pm2.5_components.csv") %>% 
   janitor::clean_names() %>% 
   rename(ammonium = ammonium_ion,
          EC = elemental_carbon,
@@ -65,9 +65,9 @@ all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>%
   filter(date > "2006-12-31",
          date < "2016-01-01")
 
-conc <- all_elements_bx %>% 
+conc <- all_elements_man %>% 
   select(-antimony, -cobalt) %>% 
-  left_join(pm25_tot_bx, by = "date") %>% 
+  left_join(pm25_tot_man, by = "date") %>% 
   relocate(date, pm25)
 
 # multiply all concentrations by 1000 to convert to ng/m3
@@ -96,7 +96,7 @@ element_scatter <-
 
 ggcorr(all_elements_bx, method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
        label = TRUE, label_size = 1.5, label_alpha = TRUE,
-       hjust = 1, size = 3, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: Bronx Air Pollution Dataset")
+       hjust = 1, size = 3, color = "grey50", layout.exp = 4) + ggtitle("Correlation Matrix: Manhattan Air Pollution Dataset")
 
 ```
 
@@ -533,8 +533,8 @@ source_pie
 
 SA_proportion_long %>% filter(element == "pm25")
 
-vals <- c(21.2, 17.5, 43.8, 3.64, 4.75, 9.09)
-val_names <- c("1 (21.2%)", "2 (17.5%)", "3 (43.8%)", "4 (3.64%)", "5 (4.75%)", "6 (9.09%)")
+vals <- c(74.8, 3.5, 0.62, 6.99, 11.1, 2.97)
+val_names <- c("1 (74.8%)", "2 (3.5%)", "3 (0.62%)", "4 (6.99%)", "5 (11.1%)", "6 (2.97%)")
 names(vals) <- val_names
 
 waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
