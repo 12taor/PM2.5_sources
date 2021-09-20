@@ -531,13 +531,15 @@ source_pie <- SA_proportion_long %>%
 
 source_pie
 
-# vals <- c(48.9, 21.4, 15.9, 10.3, 1.96, 1.49)
-# val_names <- c("Secondary Sulfate (48.9%)", "Traffic and Road Dust (21.4%)", "Crustal Dust (15.9%)", "Nitrate (10.3%)", "Industrial (1.49%)", "Salt (1.96%)")
-# names(vals) <- val_names
-# 
-# waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
-#   ) +
-#   theme(legend.text = element_text(face = "bold", size = 20))
+SA_proportion_long %>% filter(element == "pm25")
+
+vals <- c(21.2, 17.5, 43.8, 3.64, 4.75, 9.09)
+val_names <- c("1 (21.2%)", "2 (17.5%)", "3 (43.8%)", "4 (3.64%)", "5 (4.75%)", "6 (9.09%)")
+names(vals) <- val_names
+
+waffle::waffle(vals, rows = 6, size = 0.6, colors = c("#73D055FF", "#FDE725FF", "#482677FF", "#287D8EFF","#404788FF", "#29AF7FFF")
+  ) +
+  theme(legend.text = element_text(face = "bold", size = 20))
 
 SA_proportion <- SA_proportion_long %>% 
   relocate(element, srce_num, source_percent) %>% 
