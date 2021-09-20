@@ -50,10 +50,10 @@ scale_fill_discrete = scale_fill_brewer(palette = "Spectral")
 
 pm25_tot_bx <- read_csv("./data/pm2.5_tot_nyc.csv") %>% 
   filter(site == "bronx") %>% 
-  select(date_local, pm_tot) %>% 
+  select(date_local, arithmetic_mean) %>% 
   rename(
     date = date_local,
-    pm25 = pm_tot)
+    pm25 = arithmetic_mean)
 
 all_elements_bx <- read_csv("./data/bronx_daily_pm2.5_components.csv") %>% 
   janitor::clean_names() %>% 
@@ -296,7 +296,6 @@ regress = function(y) {
 # independent variables for regression will be factors from factor analysis. define these as 'x'
 x <- a %>% 
   group_by(factor_num) %>%
-  mutate(row = row_number()) %>% 
   pivot_wider(everything(),
               names_from = factor_num,
               names_prefix = "factor_",
@@ -592,8 +591,7 @@ summary(pm25, round(digits = 2))
 summarize(pm25,
           mean = mean(concentration, na.rm = TRUE),
           sd = sd(concentration, na.rm = TRUE))
-# what do I do about negative scores? keep them
-# why are there 112 missings?
+
 ```
 
 ## time trends including 2007
@@ -660,15 +658,15 @@ Correlation Matrix
 ```{r}
 pm25 %>% 
   select(-date, -day_of_week) %>% 
-  rename(
-    "Total PM" = concentration,
-    "Nitrate" = source_1,
-    "Salt" = source_2,
-    "Crustal" = source_3,
-    "Secondary" = source_4,
-    "Traffic" = source_5,
-    "Industrial" = source_6
-    ) %>% 
+  # rename(
+  #   "Total PM" = concentration,
+  #   "Nitrate" = source_1,
+  #   "Salt" = source_2,
+  #   "Crustal" = source_3,
+  #   "Secondary" = source_4,
+  #   "Traffic" = source_5,
+  #   "Industrial" = source_6
+  #   ) %>% 
   ggcorr(method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
        label = TRUE, label_size = 3, label_alpha = TRUE, label_round = 2,
        hjust = 1, size = 5, color = "grey50", layout.exp = 4)
