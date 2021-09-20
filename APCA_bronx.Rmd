@@ -580,3 +580,98 @@ pm25 <- source_conc %>%
 # write_csv(pm25, "./experimental_results/apca_scores.csv")
 
 ```
+
+APCA scores were calcualted for years 2007-2015 using a 6-factor solution
+
+
+## general info
+
+```{r}
+summary(pm25, round(digits = 2))
+
+summarize(pm25,
+          mean = mean(concentration, na.rm = TRUE),
+          sd = sd(concentration, na.rm = TRUE))
+# what do I do about negative scores? keep them
+# why are there 112 missings?
+```
+
+## time trends including 2007
+
+```{r}
+yr_num <- length(unique(year(pm25$date)))
+
+ggplot(pm25, aes(x = date, y = concentration)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+ggplot(pm25, aes(x = date, y = source_1)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+ggplot(pm25, aes(x = date, y = source_2)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+ggplot(pm25, aes(x = date, y = source_3)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+ggplot(pm25, aes(x = date, y = source_4)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+ggplot(pm25, aes(x = date, y = source_5)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+ggplot(pm25, aes(x = date, y = source_6)) +
+  geom_smooth(color = "red", method = lm, formula = y ~ ns(x, df = 1*yr_num)) +
+  geom_smooth(color = "blue", method = lm, formula = y ~ ns(x, df = 5*yr_num))
+
+```
+
+# day of week patterns including 2007
+
+```{r}
+
+pm25 <- pm25 %>% 
+  mutate(
+    day_of_week = as.character(wday(date, label = TRUE)),
+    day_of_week = factor(day_of_week,
+                         levels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))
+    )
+
+day_of_week_summary <- pm25 %>% 
+  pivot_longer(source_1:source_6,
+               names_to = "source",
+               values_to = "score") %>% 
+  group_by(day_of_week, source)
+
+ggplot(day_of_week_summary, aes(day_of_week, score)) +  
+  geom_bar(stat = "identity") + 
+  facet_grid(source~., scales = "free")
+
+```
+
+
+Correlation Matrix
+
+```{r}
+pm25 %>% 
+  select(-date, -day_of_week) %>% 
+  rename(
+    "Total PM" = concentration,
+    "Nitrate" = source_1,
+    "Salt" = source_2,
+    "Crustal" = source_3,
+    "Secondary" = source_4,
+    "Traffic" = source_5,
+    "Industrial" = source_6
+    ) %>% 
+  ggcorr(method = c("pairwise.complete.obs", "pearson"), limits = FALSE,
+       label = TRUE, label_size = 3, label_alpha = TRUE, label_round = 2,
+       hjust = 1, size = 5, color = "grey50", layout.exp = 4)
+
+```
+
